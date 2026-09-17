@@ -7,6 +7,7 @@ import {
 
 import AppShell from "./components/layout/AppShell";
 import DashboardPage from "./pages/DashboardPage";
+import FarmSetupPage from "./pages/FarmSetupPage";
 
 export default function App() {
   return (
@@ -18,6 +19,10 @@ export default function App() {
           <Route
             path="dashboard"
             element={<DashboardPage />}
+          />
+          <Route
+          path="farm/setup"
+          element={<FarmSetupPage />}
           />
 
           <Route
