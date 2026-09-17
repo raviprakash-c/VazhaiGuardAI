@@ -1,0 +1,401 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/geist";
+
+@custom-variant dark (&:is(.dark *));
+
+/* =========================================================
+   VAZHAIGUARD AI — DESIGN SYSTEM
+   ========================================================= */
+
+:root {
+  /* Brand */
+  --vg-forest: #073b2a;
+  --vg-deep: #0b4d36;
+  --vg-green: #146c43;
+  --vg-leaf: #22a35a;
+  --vg-lime: #b8df4b;
+  --vg-yellow: #f4d83f;
+
+  /* Surfaces */
+  --vg-page: #f4f8f4;
+  --vg-surface: #ffffff;
+  --vg-soft-green: #eef7f0;
+  --vg-border: #dfe9e2;
+
+  /* Typography */
+  --vg-text: #13271d;
+  --vg-muted: #66766d;
+
+  /* Status */
+  --vg-success: #23995a;
+  --vg-warning: #e9a524;
+  --vg-danger: #df4b43;
+  --vg-info: #3184d6;
+
+
+  /* =======================================================
+     SHADCN VARIABLES
+     ======================================================= */
+
+  --background: #f4f8f4;
+  --foreground: #13271d;
+
+  --card: #ffffff;
+  --card-foreground: #13271d;
+
+  --popover: #ffffff;
+  --popover-foreground: #13271d;
+
+  --primary: #0b4d36;
+  --primary-foreground: #ffffff;
+
+  --secondary: #eef7f0;
+  --secondary-foreground: #0b4d36;
+
+  --muted: #eef3ef;
+  --muted-foreground: #66766d;
+
+  --accent: #edf7ef;
+  --accent-foreground: #0b4d36;
+
+  --destructive: #df4b43;
+
+  --border: #dfe9e2;
+  --input: #dfe9e2;
+
+  --ring: #22a35a;
+
+
+  /* =======================================================
+     CHART COLORS
+     ======================================================= */
+
+  --chart-1: #146c43;
+  --chart-2: #22a35a;
+  --chart-3: #b8df4b;
+  --chart-4: #f4d83f;
+  --chart-5: #3184d6;
+
+
+  /* =======================================================
+     SIDEBAR
+     ======================================================= */
+
+  --sidebar: #073b2a;
+  --sidebar-foreground: #f7fff9;
+
+  --sidebar-primary: #b8df4b;
+  --sidebar-primary-foreground: #073b2a;
+
+  --sidebar-accent: #12553d;
+  --sidebar-accent-foreground: #ffffff;
+
+  --sidebar-border: rgba(255, 255, 255, 0.1);
+  --sidebar-ring: #b8df4b;
+
+
+  /* =======================================================
+     RADIUS
+     ======================================================= */
+
+  --radius: 0.9rem;
+}
+
+
+/* =========================================================
+   DARK MODE
+   ========================================================= */
+
+.dark {
+  --background: #071b14;
+  --foreground: #eef8f1;
+
+  --card: #0c281d;
+  --card-foreground: #eef8f1;
+
+  --popover: #0c281d;
+  --popover-foreground: #eef8f1;
+
+  --primary: #b8df4b;
+  --primary-foreground: #073b2a;
+
+  --secondary: #12382a;
+  --secondary-foreground: #f2fff6;
+
+  --muted: #12382a;
+  --muted-foreground: #9db1a5;
+
+  --accent: #164531;
+  --accent-foreground: #ffffff;
+
+  --destructive: #ef6259;
+
+  --border: rgba(255, 255, 255, 0.1);
+  --input: rgba(255, 255, 255, 0.12);
+
+  --ring: #b8df4b;
+
+  --sidebar: #041d14;
+  --sidebar-foreground: #f3fff7;
+
+  --sidebar-primary: #b8df4b;
+  --sidebar-primary-foreground: #073b2a;
+
+  --sidebar-accent: #12553d;
+  --sidebar-accent-foreground: #ffffff;
+
+  --sidebar-border: rgba(255, 255, 255, 0.08);
+  --sidebar-ring: #b8df4b;
+}
+
+
+/* =========================================================
+   TAILWIND / SHADCN THEME MAPPING
+   ========================================================= */
+
+@theme inline {
+  --font-sans: "Geist Variable", "Inter", system-ui, sans-serif;
+  --font-heading: "Geist Variable", "Inter", system-ui, sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+
+  --color-destructive: var(--destructive);
+
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground:
+    var(--sidebar-primary-foreground);
+
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground:
+    var(--sidebar-accent-foreground);
+
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --radius-sm: calc(var(--radius) * 0.65);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.35);
+  --radius-2xl: calc(var(--radius) * 1.75);
+  --radius-3xl: calc(var(--radius) * 2.2);
+}
+
+
+/* =========================================================
+   GLOBAL BASE
+   ========================================================= */
+
+@layer base {
+
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  html {
+    @apply font-sans;
+    scroll-behavior: smooth;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+
+    margin: 0;
+    min-width: 320px;
+    min-height: 100vh;
+
+    font-family:
+      "Geist Variable",
+      "Inter",
+      system-ui,
+      sans-serif;
+
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  button,
+  input,
+  textarea,
+  select {
+    font: inherit;
+  }
+}
+
+
+/* =========================================================
+   ROOT
+   IMPORTANT:
+   Do NOT center or restrict the dashboard width here.
+   ========================================================= */
+
+#root {
+  width: 100%;
+  min-height: 100vh;
+}
+
+
+/* =========================================================
+   TYPOGRAPHY
+   ========================================================= */
+
+.vg-heading {
+  font-family:
+    "Geist Variable",
+    "Inter",
+    system-ui,
+    sans-serif;
+
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.vg-display {
+  font-family:
+    "Geist Variable",
+    "Inter",
+    system-ui,
+    sans-serif;
+
+  font-weight: 750;
+  letter-spacing: -0.045em;
+}
+
+
+/* =========================================================
+   PREMIUM CARD
+   ========================================================= */
+
+.vg-card {
+  background: rgba(255, 255, 255, 0.92);
+
+  border: 1px solid
+    rgba(213, 226, 217, 0.9);
+
+  border-radius: 1.25rem;
+
+  box-shadow:
+    0 1px 2px rgba(7, 59, 42, 0.03),
+    0 8px 30px rgba(7, 59, 42, 0.055);
+
+  backdrop-filter: blur(12px);
+}
+
+
+/* =========================================================
+   PAGE BACKGROUND
+   ========================================================= */
+
+.vg-page-background {
+  background:
+    radial-gradient(
+      circle at 90% 0%,
+      rgba(184, 223, 75, 0.13),
+      transparent 26rem
+    ),
+    radial-gradient(
+      circle at 5% 95%,
+      rgba(34, 163, 90, 0.08),
+      transparent 28rem
+    ),
+    #f4f8f4;
+}
+
+
+/* =========================================================
+   HERO OVERLAY
+   ========================================================= */
+
+.vg-hero-overlay {
+  background:
+    linear-gradient(
+      90deg,
+      rgba(4, 42, 29, 0.96) 0%,
+      rgba(5, 55, 37, 0.82) 42%,
+      rgba(4, 31, 24, 0.32) 100%
+    );
+}
+
+
+/* =========================================================
+   STATUS UTILITIES
+   ========================================================= */
+
+.vg-status-success {
+  color: #177944;
+  background: #e5f6eb;
+}
+
+.vg-status-warning {
+  color: #956009;
+  background: #fff3d6;
+}
+
+.vg-status-danger {
+  color: #b52d27;
+  background: #fde8e6;
+}
+
+.vg-status-info {
+  color: #246ba8;
+  background: #e7f2fc;
+}
+
+
+/* =========================================================
+   SCROLLBAR
+   ========================================================= */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cad8ce;
+  border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a9bdae;
+}
