@@ -9,6 +9,7 @@ import AppShell from "./components/layout/AppShell";
 import DashboardPage from "./pages/DashboardPage";
 import FarmSetupPage from "./pages/FarmSetupPage";
 import VoiceRegistrationPage from "./pages/VoiceRegistrationPage";
+import FarmLocationPage from "./pages/FarmLocationPage";
 
 export default function App() {
   return (
@@ -43,6 +44,13 @@ export default function App() {
           path="farm/voice-register"
           element={
             <VoiceRegistrationPage />
+          }
+        />
+
+        <Route
+          path="farm/location"
+          element={
+            <FarmLocationPage />
           }
         />
 

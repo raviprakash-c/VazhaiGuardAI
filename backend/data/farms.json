@@ -1,0 +1,60 @@
+[
+  {
+    "farm_id": "farm_57850dc3e3",
+    "farm_profile": {
+      "farm_name": "வாழைத்தோட்டம்",
+      "total_farm_acres": 10,
+      "banana_area_acres": 5,
+      "banana_variety": "Nendran",
+      "planting_age": "5 months",
+      "approximate_plants": null,
+      "drainage": "good",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 9.88399032923364,
+      "longitude": 78.08006421246873,
+      "label": "Current GPS location"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.07943863817542,
+            9.885169041460813
+          ],
+          [
+            78.07946635904028,
+            9.88376961978723
+          ],
+          [
+            78.08042025848357,
+            9.885115595541876
+          ],
+          [
+            78.08071991564913,
+            9.883564676375471
+          ],
+          [
+            78.08066058643755,
+            9.883753872026645
+          ],
+          [
+            78.07948088253141,
+            9.883778911467942
+          ],
+          [
+            78.07943863817542,
+            9.885169041460813
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 2.4468,
+    "perimeter_m": 819.6,
+    "farmer_confirmed": true,
+    "boundary_source": "farmer_drawn_satellite"
+  }
+]

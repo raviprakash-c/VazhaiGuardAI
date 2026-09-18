@@ -1,8 +1,12 @@
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
+from voice_registration import router as voice_registration_router
+from farm_map import router as farm_map_router
 
 import httpx
+from farm_map import router as farm_map_router
 
 from voice_registration import (
     router as voice_registration_router,
@@ -22,6 +26,8 @@ app = FastAPI(
     version="1.0.0",
 )
 
+app.include_router(voice_registration_router)
+app.include_router(farm_map_router)
 
 # =========================================================
 # CORS
@@ -46,8 +52,11 @@ app.add_middleware(
 # =========================================================
 
 app.include_router(
-    voice_registration_router
-)
+    farm_map_router
+
+
+),
+app.include_router(farm_map_router)
 
 
 # =========================================================

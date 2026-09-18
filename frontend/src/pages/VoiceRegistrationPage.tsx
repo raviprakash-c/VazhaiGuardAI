@@ -4,6 +4,7 @@ import {
   useState,
 } from "react";
 
+import { useNavigate } from "react-router-dom";
 
 import {
   CheckCircle2,
@@ -93,6 +94,8 @@ const fieldNumber: Record<
 ========================================================= */
 
 export default function VoiceRegistrationPage() {
+  const navigate = useNavigate();
+
   const [
     language,
     setLanguage,
@@ -287,22 +290,15 @@ export default function VoiceRegistrationPage() {
            * Give React time to
            * render the page first.
            */
-          setConversation([
-  {
-    role: "assistant",
-    text: response.question,
-  },
-]);
-
-window.setTimeout(
-  () => {
-    speakCurrentQuestion(
-      response.current_field,
-      response.question
-    );
-  },
-  500
-);
+          window.setTimeout(
+            () => {
+              speakCurrentQuestion(
+                response.current_field,
+                response.question
+              );
+            },
+            500
+          );
         } catch (
           error
         ) {
@@ -423,6 +419,17 @@ window.setTimeout(
           setComplete(
             response.complete
           );
+
+          if (
+            response.complete
+          ) {
+            localStorage.setItem(
+              "vazhaiguard_farm_profile",
+              JSON.stringify(
+                response.farm_state
+              )
+            );
+          }
 
           setConversation(
             (previous) => [
@@ -570,7 +577,6 @@ window.setTimeout(
   /* =======================================================
      START MICROPHONE
   ======================================================== */
-  
 
   const beginListening =
     () => {
@@ -851,7 +857,7 @@ window.setTimeout(
             ]
           }
 
-          totalSteps={7}
+          totalSteps={9}
 
           onListen={
             beginListening
@@ -900,6 +906,24 @@ window.setTimeout(
               label="தோட்டத்தின் பெயர்"
               value={
                 farmState.farm_name
+              }
+            />
+
+            <ProfileValue
+              label="மொத்த நிலப்பரப்பு"
+              value={
+                farmState.total_farm_acres !== undefined
+                  ? `${farmState.total_farm_acres} acres`
+                  : undefined
+              }
+            />
+
+            <ProfileValue
+              label="வாழை பயிரிடப்பட்ட பரப்பு"
+              value={
+                farmState.banana_area_acres !== undefined
+                  ? `${farmState.banana_area_acres} acres`
+                  : undefined
               }
             />
 
@@ -968,8 +992,27 @@ window.setTimeout(
                   <p className="mt-1 text-[11px] leading-5 text-muted-foreground">
                     அடுத்து GPS இடத்தையும்
                     தோட்ட எல்லையையும்
-                    வரைபடத்தில் உறுதி செய்வோம்.
+                    satellite வரைபடத்தில் உறுதி செய்வோம்.
                   </p>
+
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      localStorage.setItem(
+                        "vazhaiguard_farm_profile",
+                        JSON.stringify(
+                          farmState
+                        )
+                      );
+
+                      navigate(
+                        "/farm/location"
+                      );
+                    }}
+                    className="mt-4 h-10 rounded-xl bg-[#073b2a] px-4 text-white hover:bg-[#0b4d36]"
+                  >
+                    Satellite Map-க்கு தொடரவும்
+                  </Button>
 
                 </div>
 
