@@ -1,6 +1,12 @@
 import { useEffect, type ElementType } from "react";
 import { motion } from "framer-motion";
+import { useNavigate } from "react-router-dom";
 
+import {
+  Mic,
+  ArrowRight,
+  
+} from "lucide-react";
 import {
   CloudRain,
   CloudSun,
@@ -24,13 +30,14 @@ import { useWeather } from "../hooks/useWeather";
 import type { WeatherData } from "../types/weather";
 
 export default function DashboardPage() {
+  const navigate = useNavigate();
+
   const {
     coords,
     isLocating,
     locationError,
     getCurrentLocation,
   } = useGeolocation();
-
   const {
     weather,
     isLoadingWeather,
@@ -86,6 +93,65 @@ export default function DashboardPage() {
       {/* =====================================================
           HERO SECTION
       ====================================================== */}
+      <section className="mt-6">
+  <div className="relative overflow-hidden rounded-[28px] border border-[#dce8df] bg-gradient-to-br from-[#073b2a] via-[#0b4d36] to-[#146c43] p-6 text-white shadow-[0_18px_60px_rgba(7,59,42,0.15)] sm:p-7">
+
+    {/* Background glow */}
+    <div className="absolute -right-20 -top-24 h-64 w-64 rounded-full bg-[#b8df4b]/15 blur-3xl" />
+
+    <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+
+      <div className="flex items-start gap-4">
+
+        <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl bg-[#b8df4b] shadow-lg">
+          <Mic className="h-6 w-6 text-[#073b2a]" />
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#b8df4b]">
+              AI Voice Registration
+            </p>
+
+            <span className="flex items-center gap-1 rounded-full bg-white/10 px-2 py-1 text-[9px] font-semibold text-white/70">
+              <Sparkles className="h-3 w-3" />
+              Farmer Friendly
+            </span>
+          </div>
+
+          <h2 className="mt-2 text-xl font-bold sm:text-2xl">
+            பேசிப் பதிவு செய்யுங்கள்
+          </h2>
+
+          <p className="mt-1 text-sm font-medium text-white/80">
+            Register your banana farm by speaking
+          </p>
+
+          <p className="mt-3 max-w-xl text-xs leading-5 text-white/55">
+            படிக்கவோ type செய்யவோ தேவையில்லை.
+            VazhaiGuard கேள்வி கேட்கும்.
+            நீங்கள் சாதாரணமாக தமிழில் பேசினால் போதும்.
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() =>navigate(
+            "/farm/voice-register"
+          )
+        }
+        className="flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-2xl bg-[#b8df4b] px-6 text-sm font-bold text-[#073b2a] shadow-lg transition hover:bg-[#c8eb65]"
+      >
+        <Mic className="h-4 w-4" />
+
+        குரல் பதிவு தொடங்கு
+
+        <ArrowRight className="h-4 w-4" />
+      </button>
+    </div>
+  </div>
+</section>
 
       <section className="relative overflow-hidden rounded-[30px] bg-[#073b2a] shadow-[0_20px_70px_rgba(7,59,42,0.16)]">
         {/* Background glow */}

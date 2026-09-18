@@ -1,36 +1,62 @@
 import {
-  BrowserRouter,
   Navigate,
   Route,
   Routes,
 } from "react-router-dom";
 
 import AppShell from "./components/layout/AppShell";
+
 import DashboardPage from "./pages/DashboardPage";
 import FarmSetupPage from "./pages/FarmSetupPage";
+import VoiceRegistrationPage from "./pages/VoiceRegistrationPage";
 
 export default function App() {
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<AppShell />}>
-          <Route index element={<Navigate to="/dashboard" replace />} />
+    <Routes>
+      <Route element={<AppShell />}>
 
-          <Route
-            path="dashboard"
-            element={<DashboardPage />}
-          />
-          <Route
+        <Route
+          index
+          element={
+            <Navigate
+              to="/dashboard"
+              replace
+            />
+          }
+        />
+
+        <Route
+          path="dashboard"
+          element={
+            <DashboardPage />
+          }
+        />
+
+        <Route
           path="farm/setup"
-          element={<FarmSetupPage />}
-          />
+          element={
+            <FarmSetupPage />
+          }
+        />
 
-          <Route
-            path="*"
-            element={<Navigate to="/dashboard" replace />}
-          />
-        </Route>
-      </Routes>
-    </BrowserRouter>
+        <Route
+          path="farm/voice-register"
+          element={
+            <VoiceRegistrationPage />
+          }
+        />
+
+        <Route
+          path="*"
+          element={
+            <Navigate
+              to="/dashboard"
+              replace
+            />
+          }
+        />
+
+      </Route>
+    </Routes>
   );
 }

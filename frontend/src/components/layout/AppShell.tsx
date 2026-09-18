@@ -5,6 +5,7 @@ import MobileBottomNav from "./MobileBottomNav";
 import MobileHeader from "./MobileHeader";
 import TopHeader from "./TopHeader";
 
+
 export default function AppShell() {
   return (
     <div className="vg-page-background min-h-screen">

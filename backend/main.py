@@ -1,13 +1,15 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import httpx
-
+from voice_registration import router as voice_registration_router
 
 app = FastAPI(
     title="VazhaiGuard AI API",
     version="0.1.0"
 )
-
+app.include_router(
+    voice_registration_router
+)
 
 # --------------------------------------------------
 # CORS
