@@ -2,8 +2,11 @@ export type VoiceLanguage =
   | "ta-IN"
   | "en-IN";
 
+
 export type RegistrationField =
   | "farm_name"
+  | "total_farm_acres"
+  | "banana_area_acres"
   | "banana_variety"
   | "planting_age"
   | "approximate_plants"
@@ -12,8 +15,15 @@ export type RegistrationField =
   | "accessibility"
   | "complete";
 
+
 export interface VoiceFarmState {
   farm_name?: string;
+
+  total_farm_acres?:
+    | number;
+
+  banana_area_acres?:
+    | number;
 
   banana_variety?: string;
 
@@ -39,6 +49,7 @@ export interface VoiceFarmState {
     | "difficult";
 }
 
+
 export interface VoiceStartResponse {
   session_id: string;
 
@@ -52,6 +63,7 @@ export interface VoiceStartResponse {
 
   complete: boolean;
 }
+
 
 export interface VoiceTurnRequest {
   session_id: string;
@@ -67,6 +79,7 @@ export interface VoiceTurnRequest {
   farm_state:
     VoiceFarmState;
 }
+
 
 export interface VoiceTurnResponse {
   session_id: string;

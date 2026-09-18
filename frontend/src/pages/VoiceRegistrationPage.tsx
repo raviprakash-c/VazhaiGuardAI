@@ -4,6 +4,7 @@ import {
   useState,
 } from "react";
 
+
 import {
   CheckCircle2,
   Keyboard,
@@ -68,19 +69,23 @@ const fieldNumber: Record<
 > = {
   farm_name: 1,
 
-  banana_variety: 2,
+  total_farm_acres: 2,
 
-  planting_age: 3,
+  banana_area_acres: 3,
 
-  approximate_plants: 4,
+  banana_variety: 4,
 
-  drainage: 5,
+  planting_age: 5,
 
-  support: 6,
+  approximate_plants: 6,
 
-  accessibility: 7,
+  drainage: 7,
 
-  complete: 7,
+  support: 8,
+
+  accessibility: 9,
+
+  complete: 9,
 };
 
 /* =========================================================
@@ -282,15 +287,22 @@ export default function VoiceRegistrationPage() {
            * Give React time to
            * render the page first.
            */
-          window.setTimeout(
-            () => {
-              speakCurrentQuestion(
-                response.current_field,
-                response.question
-              );
-            },
-            500
-          );
+          setConversation([
+  {
+    role: "assistant",
+    text: response.question,
+  },
+]);
+
+window.setTimeout(
+  () => {
+    speakCurrentQuestion(
+      response.current_field,
+      response.question
+    );
+  },
+  500
+);
         } catch (
           error
         ) {
@@ -558,6 +570,7 @@ export default function VoiceRegistrationPage() {
   /* =======================================================
      START MICROPHONE
   ======================================================== */
+  
 
   const beginListening =
     () => {
