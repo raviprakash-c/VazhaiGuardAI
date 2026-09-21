@@ -11,62 +11,200 @@ export type FarmPolygonPayload = {
 
 export type FarmLocationSaveRequest = {
   farm_profile: Record<string, unknown>;
+
   location: FarmMapLocationPayload;
+
   boundary: FarmPolygonPayload;
+
   mapped_area_acres: number;
+
   perimeter_m: number;
+
   farmer_confirmed: true;
+
   boundary_source: "farmer_drawn_satellite";
 };
 
 export type FarmLocationSaveResponse = {
   farm_id: string;
+
   saved: boolean;
+
   location: FarmMapLocationPayload;
+
   boundary: FarmPolygonPayload;
+
   mapped_area_acres: number;
+
   perimeter_m: number;
+
   farmer_confirmed: boolean;
+
   boundary_source: string;
 };
+
+
+/* =========================================================
+   AI FARM PROFILE
+   ========================================================= */
+
+export type CreateFarmProfileRequest = {
+  farm_id: string;
+
+  farm_profile: Record<string, unknown>;
+
+  location: FarmMapLocationPayload;
+
+  boundary: FarmPolygonPayload;
+
+  mapped_area_acres: number;
+
+  perimeter_m: number;
+
+  farmer_confirmed: true;
+
+  boundary_source: "farmer_drawn_satellite";
+};
+
+
+export type CreateFarmProfileResponse = {
+  farm_id: string;
+
+  profile_status: string;
+
+  profile: Record<string, unknown>;
+
+  next_questions: string[];
+
+  verification: {
+    status: string;
+
+    issues: string[];
+
+    checked_fields: string[];
+  };
+};
+
+
+/* =========================================================
+   API BASE URL
+   ========================================================= */
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000"
 ).replace(/\/$/, "");
 
+
+/* =========================================================
+   SAVE FARM LOCATION
+   ========================================================= */
+
 export async function saveFarmLocation(
   payload: FarmLocationSaveRequest
 ): Promise<FarmLocationSaveResponse> {
+
   const response = await fetch(
     `${API_BASE_URL}/farm/location`,
     {
       method: "POST",
+
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type":
+          "application/json",
       },
-      body: JSON.stringify(payload),
+
+      body: JSON.stringify(
+        payload
+      ),
     }
   );
 
+
   if (!response.ok) {
-    let message = "Unable to save farm location.";
+
+    let message =
+      "Unable to save farm location.";
 
     try {
-      const body = (await response.json()) as {
-        detail?: string;
-      };
+
+      const body =
+        (await response.json()) as {
+          detail?: string;
+        };
 
       if (body.detail) {
         message = body.detail;
       }
+
     } catch {
-      // Keep the default message when the backend
-      // does not return a JSON error response.
+      // Keep default error.
     }
 
-    throw new Error(message);
+    throw new Error(
+      message
+    );
   }
 
-  return (await response.json()) as FarmLocationSaveResponse;
+
+  return (
+    await response.json()
+  ) as FarmLocationSaveResponse;
+}
+
+
+/* =========================================================
+   CREATE AI FARM PROFILE
+   ========================================================= */
+
+export async function createFarmProfile(
+  payload: CreateFarmProfileRequest
+): Promise<CreateFarmProfileResponse> {
+
+  const response = await fetch(
+    `${API_BASE_URL}/farm/profile`,
+    {
+      method: "POST",
+
+      headers: {
+        "Content-Type":
+          "application/json",
+      },
+
+      body: JSON.stringify(
+        payload
+      ),
+    }
+  );
+
+
+  if (!response.ok) {
+
+    let message =
+      "Unable to create AI farm profile.";
+
+    try {
+
+      const body =
+        (await response.json()) as {
+          detail?: string;
+        };
+
+      if (body.detail) {
+        message = body.detail;
+      }
+
+    } catch {
+      // Keep default error.
+    }
+
+    throw new Error(
+      message
+    );
+  }
+
+
+  return (
+    await response.json()
+  ) as CreateFarmProfileResponse;
 }

@@ -10,6 +10,7 @@ import DashboardPage from "./pages/DashboardPage";
 import FarmSetupPage from "./pages/FarmSetupPage";
 import VoiceRegistrationPage from "./pages/VoiceRegistrationPage";
 import FarmLocationPage from "./pages/FarmLocationPage";
+import FarmHomePage from "./pages/FarmHomePage";
 
 export default function App() {
   return (
@@ -53,7 +54,19 @@ export default function App() {
             <FarmLocationPage />
           }
         />
+          <Route
+  path="farm/location"
+  element={
+    <FarmLocationPage />
+  }
+/>
 
+<Route
+  path="farm/home"
+  element={
+    <FarmHomePage />
+  }
+/>
         <Route
           path="*"
           element={

@@ -368,18 +368,43 @@ export function useVoiceAssistant() {
           };
 
         utterance.onerror =
-          () => {
-            setIsSpeaking(
-              false
-            );
+  (event) => {
 
-            setVoiceError(
-              language ===
-                "ta-IN"
-                ? "குரலை இயக்க முடியவில்லை. மீண்டும் முயற்சி செய்யுங்கள்."
-                : "Unable to play the voice response."
-            );
-          };
+    console.log(
+      "[Speech] error:",
+      event.error
+    );
+
+    setIsSpeaking(false);
+
+    // React StrictMode / switching languages /
+    // replaying can intentionally cancel speech.
+    // This is NOT a real playback failure.
+    if (
+      event.error === "interrupted" ||
+      event.error === "canceled"
+    ) {
+      return;
+    }
+
+    if (
+      event.error === "not-allowed"
+    ) {
+      setVoiceError(
+        language === "ta-IN"
+          ? "Browser தானாக குரல் இயக்க அனுமதிக்கவில்லை. மீண்டும் கேள் button-ஐ அழுத்துங்க."
+          : "The browser blocked automatic audio. Click Replay question once."
+      );
+
+      return;
+    }
+
+    setVoiceError(
+      language === "ta-IN"
+        ? "குரலை இயக்க முடியவில்லை. மீண்டும் முயற்சி செய்யுங்க."
+        : `Unable to play the voice response (${event.error}).`
+    );
+  };
 
         window.speechSynthesis.speak(
           utterance

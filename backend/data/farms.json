@@ -56,5 +56,129 @@
     "perimeter_m": 819.6,
     "farmer_confirmed": true,
     "boundary_source": "farmer_drawn_satellite"
+  },
+  {
+    "farm_id": "farm_ff3fb1f1ba",
+    "farm_profile": {
+      "farm_name": "வாழை தோட்டம்",
+      "total_farm_acres": 5,
+      "banana_area_acres": 3,
+      "banana_variety": "Poovan",
+      "planting_age": "4 months",
+      "approximate_plants": 3000,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 9.884160514716939,
+      "longitude": 78.07976513312082,
+      "label": "Farmer selected map point"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.07907860259212,
+            9.882935682205286
+          ],
+          [
+            78.07661380811157,
+            9.882854569040731
+          ],
+          [
+            78.07741214567204,
+            9.881919285760574
+          ],
+          [
+            78.07818889418371,
+            9.881781120230968
+          ],
+          [
+            78.07972620894753,
+            9.881839574885419
+          ],
+          [
+            78.08037889346139,
+            9.882099963672331
+          ],
+          [
+            78.07992039607575,
+            9.882668567041534
+          ],
+          [
+            78.07944778135834,
+            9.882763265681547
+          ],
+          [
+            78.07907860259212,
+            9.882935682205286
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 9.491,
+    "perimeter_m": 916.5,
+    "farmer_confirmed": true,
+    "boundary_source": "farmer_drawn_satellite"
+  },
+  {
+    "farm_id": "farm_f6cb7c9197",
+    "farm_profile": {
+      "farm_name": "முருகன் தோட்டம்",
+      "total_farm_acres": 3,
+      "banana_area_acres": 2,
+      "banana_variety": "Nendran",
+      "planting_age": "5 months",
+      "approximate_plants": null,
+      "drainage": "moderate",
+      "support": "low",
+      "accessibility": "difficult"
+    },
+    "location": {
+      "latitude": 9.884141497528,
+      "longitude": 78.0799492033022,
+      "label": "Current GPS location"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.08121825034976,
+            9.889514073654084
+          ],
+          [
+            78.0796296751792,
+            9.889370403596601
+          ],
+          [
+            78.08016495141277,
+            9.888760094282432
+          ],
+          [
+            78.08039667662962,
+            9.888942170821906
+          ],
+          [
+            78.08090813143508,
+            9.888798608745716
+          ],
+          [
+            78.08148672736587,
+            9.888712237584755
+          ],
+          [
+            78.08121825034976,
+            9.889514073654084
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 2.8301,
+    "perimeter_m": 513.2,
+    "farmer_confirmed": true,
+    "boundary_source": "farmer_drawn_satellite"
   }
 ]

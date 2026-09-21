@@ -16,7 +16,13 @@ import {
 
 import { Button } from "../components/ui/button";
 import FarmBoundaryEditor from "../components/farm/FarmBoundaryEditor";
-import { saveFarmLocation } from "../services/farmMapApi";
+import {
+  useNavigate,
+} from "react-router-dom";
+import {
+  saveFarmLocation,
+  createFarmProfile,
+} from "../services/farmMapApi";
 
 import type {
   VoiceFarmState,
@@ -163,6 +169,9 @@ function areaAcres(
 }
 
 export default function FarmLocationPage() {
+
+  const navigate =
+  useNavigate();
   const [farmProfile] =
     useState<VoiceFarmState>(
       getStoredFarmProfile
@@ -482,6 +491,48 @@ export default function FarmLocationPage() {
       setSavedFarmId(
         response.farm_id
       );
+      const aiProfile =
+  await createFarmProfile({
+    farm_id:
+      response.farm_id,
+
+    farm_profile:
+      farmProfile as unknown as Record<
+        string,
+        unknown
+      >,
+
+    location:
+      response.location,
+
+    boundary:
+      response.boundary,
+
+    mapped_area_acres:
+      response.mapped_area_acres,
+
+    perimeter_m:
+      response.perimeter_m,
+
+    farmer_confirmed:
+      true,
+
+    boundary_source:
+      "farmer_drawn_satellite",
+  });
+
+localStorage.setItem(
+  "vazhaiguard_ai_profile",
+  JSON.stringify(
+    aiProfile
+  )
+);
+
+navigate(
+  `/farm/home?farm_id=${encodeURIComponent(
+    response.farm_id
+  )}`
+);
     } catch (error) {
       console.error(
         "FARM LOCATION SAVE ERROR:",

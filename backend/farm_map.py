@@ -9,6 +9,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 
+from agents.farm_profile_agent import (
+    create_profile,
+)
+
+from schemas.farm_profile import (
+    FarmProfileRequest,
+    FarmProfileResponse,
+)
+
+
 router = APIRouter(
     prefix="/farm",
     tags=["farm-map"],
@@ -237,7 +247,86 @@ def save_farm_location(
             request.boundary_source
         ),
     )
+# =========================================================
+# CREATE AI FARM PROFILE
+# =========================================================
 
+@router.post(
+    "/profile",
+    response_model=FarmProfileResponse,
+)
+def create_ai_farm_profile(
+    request: FarmProfileRequest,
+):
+
+    if not request.farmer_confirmed:
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Farmer must confirm "
+                "the farm boundary first."
+            ),
+        )
+
+    if (
+        request.mapped_area_acres
+        <= 0
+    ):
+
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Mapped farm area "
+                "must be greater than zero."
+            ),
+        )
+
+    try:
+
+        result = create_profile(
+            farm_id=
+                request.farm_id,
+
+            farm_profile=
+                request.farm_profile,
+
+            location=
+                request.location,
+
+            boundary=
+                request.boundary,
+
+            mapped_area_acres=
+                request.mapped_area_acres,
+
+            perimeter_m=
+                request.perimeter_m,
+
+            farmer_confirmed=
+                request.farmer_confirmed,
+
+            boundary_source=
+                request.boundary_source,
+        )
+
+        return result
+
+    except Exception as error:
+
+        print(
+            "FARM PROFILE ERROR:",
+            repr(error),
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to create "
+                "AI farm profile: "
+                + str(error)
+            ),
+        ) from error
 
 # =========================================================
 # GET SAVED FARMS

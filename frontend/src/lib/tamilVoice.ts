@@ -2,154 +2,166 @@ import type {
   RegistrationField,
 } from "../types/voice";
 
-/* =========================================================
-   BACKEND TAMIL TTS
-========================================================= */
+
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000"
+).replace(/\/$/, "");
+
 
 const TAMIL_AUDIO_BASE_URL =
-  "http://127.0.0.1:8000/voice/tamil-audio";
+  `${API_BASE_URL}/voice/tamil-audio`;
+
 
 let activeAudio:
   | HTMLAudioElement
   | null = null;
 
-let pendingResolve:
-  | (() => void)
-  | null = null;
 
 function audioUrl(
   field: string
 ) {
-  return `${TAMIL_AUDIO_BASE_URL}/${encodeURIComponent(field)}`;
+  return (
+    `${TAMIL_AUDIO_BASE_URL}/` +
+    encodeURIComponent(field) +
+    `?t=${Date.now()}`
+  );
 }
 
-function getTamilPlayer(): HTMLAudioElement {
-  if (!activeAudio) {
-    activeAudio =
-      new Audio();
 
-    activeAudio.preload =
-      "auto";
-
-    activeAudio.volume =
-      1;
-  }
-
-  return activeAudio;
-}
-
-export function stopTamilQuestion() {
+function stopCurrentAudio() {
   if (!activeAudio) {
     return;
   }
 
   activeAudio.pause();
 
-  activeAudio.currentTime =
-    0;
+  activeAudio.currentTime = 0;
 
-  activeAudio.onended =
-    null;
+  activeAudio.src = "";
 
-  activeAudio.onerror =
-    null;
-
-  if (pendingResolve) {
-    pendingResolve();
-
-    pendingResolve =
-      null;
-  }
+  activeAudio = null;
 }
+
+
+export function stopTamilQuestion() {
+  stopCurrentAudio();
+}
+
 
 function playAudio(
   source: string
 ): Promise<void> {
+
   return new Promise(
     (resolve, reject) => {
-      stopTamilQuestion();
+
+      stopCurrentAudio();
 
       const audio =
-        getTamilPlayer();
+        new Audio(source);
 
-      pendingResolve =
-        resolve;
+      activeAudio =
+        audio;
 
-      audio.onended =
-        () => {
-          pendingResolve =
-            null;
+      audio.preload =
+        "auto";
 
-          resolve();
-        };
+      audio.volume =
+        1;
 
-      audio.onerror =
-        () => {
-          pendingResolve =
-            null;
+      audio.oncanplay = () => {
+        console.log(
+          "[TamilVoice] Audio ready:",
+          source
+        );
+      };
 
-          console.error(
-            "Unable to load Tamil audio:",
-            source
-          );
+      audio.onplay = () => {
+        console.log(
+          "[TamilVoice] Playing:",
+          source
+        );
+      };
 
-          reject(
-            new Error(
-              `Unable to load ${source}`
-            )
-          );
-        };
+      audio.onended = () => {
+        activeAudio =
+          null;
 
-      audio.src =
-        source;
+        resolve();
+      };
 
-      audio.load();
+      audio.onerror = () => {
 
-      console.log(
-        "[TamilVoice] Playing:",
-        source
-      );
+        console.error(
+          "[TamilVoice] Audio load failed:",
+          source,
+          audio.error
+        );
 
-      audio.play().catch(
-        (error) => {
-          pendingResolve =
-            null;
+        activeAudio =
+          null;
 
-          console.error(
-            "Unable to play Tamil audio:",
-            error
-          );
+        reject(
+          new Error(
+            "Tamil audio could not be loaded"
+          )
+        );
+      };
 
-          reject(error);
-        }
-      );
+
+      audio
+        .play()
+        .catch(
+          (error) => {
+
+            console.error(
+              "[TamilVoice] Browser blocked playback:",
+              error
+            );
+
+            activeAudio =
+              null;
+
+            reject(error);
+          }
+        );
     }
   );
 }
+
 
 export async function playTamilQuestion(
   field: RegistrationField
 ) {
   try {
+
     await playAudio(
       audioUrl(field)
     );
+
   } catch (error) {
+
     console.error(
       "Tamil question playback failed:",
       error
     );
+
+    throw error;
   }
 }
+
 
 export async function playTamilAcceptedTurn(
   nextField: RegistrationField
 ) {
   try {
+
     if (
       nextField ===
       "complete"
     ) {
+
       await playTamilQuestion(
         "complete"
       );
@@ -157,16 +169,20 @@ export async function playTamilAcceptedTurn(
       return;
     }
 
+
     await playAudio(
       audioUrl(
         "confirmed"
       )
     );
 
+
     await playTamilQuestion(
       nextField
     );
+
   } catch (error) {
+
     console.error(
       "Tamil accepted turn failed:",
       error
@@ -174,20 +190,25 @@ export async function playTamilAcceptedTurn(
   }
 }
 
+
 export async function playTamilRetry(
   currentField: RegistrationField
 ) {
   try {
+
     await playAudio(
       audioUrl(
         "retry"
       )
     );
 
+
     await playTamilQuestion(
       currentField
     );
+
   } catch (error) {
+
     console.error(
       "Tamil retry playback failed:",
       error

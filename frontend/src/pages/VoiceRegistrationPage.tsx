@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -95,6 +96,10 @@ const fieldNumber: Record<
 
 export default function VoiceRegistrationPage() {
   const navigate = useNavigate();
+  const speakTimerRef =
+  useRef<number | null>(
+    null
+  );
 
   const [
     language,
@@ -290,15 +295,28 @@ export default function VoiceRegistrationPage() {
            * Give React time to
            * render the page first.
            */
-          window.setTimeout(
-            () => {
-              speakCurrentQuestion(
-                response.current_field,
-                response.question
-              );
-            },
-            500
-          );
+          if (
+  speakTimerRef.current !== null
+) {
+  window.clearTimeout(
+    speakTimerRef.current
+  );
+}
+
+speakTimerRef.current =
+  window.setTimeout(
+    () => {
+
+      speakCurrentQuestion(
+        response.current_field,
+        response.question
+      );
+
+      speakTimerRef.current =
+        null;
+    },
+    700
+  );
         } catch (
           error
         ) {
@@ -328,17 +346,31 @@ export default function VoiceRegistrationPage() {
   ======================================================== */
 
   useEffect(() => {
-    void initialise();
 
-    return () => {
-      stopTamilQuestion();
+  void initialise();
 
-      cancelSpeech();
-    };
-  }, [
-    initialise,
-    cancelSpeech,
-  ]);
+  return () => {
+
+    if (
+      speakTimerRef.current !== null
+    ) {
+      window.clearTimeout(
+        speakTimerRef.current
+      );
+
+      speakTimerRef.current =
+        null;
+    }
+
+    stopTamilQuestion();
+
+    cancelSpeech();
+  };
+
+}, [
+  initialise,
+  cancelSpeech,
+]);
 
   /* =======================================================
      PROCESS FARMER ANSWER
