@@ -11,6 +11,11 @@ import FarmSetupPage from "./pages/FarmSetupPage";
 import VoiceRegistrationPage from "./pages/VoiceRegistrationPage";
 import FarmLocationPage from "./pages/FarmLocationPage";
 import FarmHomePage from "./pages/FarmHomePage";
+// Inside frontend/src/App.tsx
+
+
+// ... inside your Routes component ...
+//<Route path="/farm/location" element={<FarmLocationPage />} />
 
 export default function App() {
   return (
@@ -26,7 +31,7 @@ export default function App() {
             />
           }
         />
-
+         <Route path="/farm/location" element={<FarmLocationPage />} />
         <Route
           path="dashboard"
           element={

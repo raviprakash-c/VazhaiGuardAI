@@ -1,16 +1,17 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException, Form
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles  # <-- ADD THIS LINE
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
-from typing import List, Optional
-import uuid
+from typing import Optional, Dict, Any
 import os
+import uuid
 
-# Import Services
-from services.land_intelligence import land_service
+from services.voice_service import start_session, process_turn, get_empty_state, FIELD_ORDER, QUESTIONS_TA, QUESTIONS_EN, QUESTIONS_EN
 
-app = FastAPI(title="VazhaiGuardAI - Phase 1")
+app = FastAPI(title="VazhaiGuardAI API")
 
-# CORS
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -19,90 +20,63 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Models ---
-class VoiceRegistrationRequest(BaseModel):
-    farmer_name: str
-    audio_transcript: str  # Text from Tamil Speech-to-Text
+# --- Audio Setup (Keep existing) ---
+AUDIO_DIR = os.path.join(os.path.dirname(__file__), "generated_audio")
+if not os.path.exists(AUDIO_DIR):
+    os.makedirs(AUDIO_DIR)
+app.mount("/voice/tamil-audio", StaticFiles(directory=AUDIO_DIR), name="tamil-audio")
 
-class FarmBoundaryRequest(BaseModel):
-    farmer_id: str
-    coordinates: List[List[float]]  # GeoJSON Polygon [[lon, lat], [lon, lat]...]
+# --- GIS Data Path ---
+GIS_DATA_PATH = os.path.join(os.path.dirname(__file__), "challenge_data", "task2_geojson")
 
-# --- Mock Database (In-Memory) ---
-farmers_db = {}
-farms_db = {}
-
-# --- Endpoints ---
-
-@app.get("/")
-def read_root():
-    return {"status": "VazhaiGuardAI Phase 1 Running", "services": ["Voice", "Land Intelligence"]}
-
-@app.post("/api/voice/register")
-async def register_farmer(request: VoiceRegistrationRequest):
+# --- New API: Serve Cadastral/Boundary Layers ---
+@app.get("/api/gis/layers/{layer_name}")
+async def get_gis_layer(layer_name: str):
     """
-    Phase 1 Step 1: Voice Registration
-    Converts transcript to Farmer Profile.
+    Serves specific GeoJSON layers to the frontend map.
+    Usage: /api/gis/layers/Park_Cadastral_Map
     """
-    farmer_id = str(uuid.uuid4())
+    file_path = os.path.join(GIS_DATA_PATH, f"{layer_name}.geojson")
     
-    # Save profile
-    farmers_db[farmer_id] = {
-        "name": request.farmer_name,
-        "language": "Tamil",
-        "transcript": request.audio_transcript,
-        "voice_profile_status": "Active"
-    }
+    if not os.path.exists(file_path):
+        raise HTTPException(status_code=404, detail=f"Layer {layer_name} not found")
     
-    return {
-        "status": "success",
-        "farmer_id": farmer_id,
-        "message": f"Welcome, {request.farmer_name}. Voice profile created.",
-        "next_step": "Please draw your farm boundary on the map."
-    }
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        return JSONResponse(content=data)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading GeoJSON: {str(e)}")
 
-@app.post("/api/farm/create")
-async def create_smart_farm(request: FarmBoundaryRequest):
-    """
-    Phase 1 Step 2: Smart Farm Setup with Land Intelligence
-    Validates coordinates against Task 2 (GIS) and Task 3 (Admin) data.
-    """
-    if request.farmer_id not in farmers_db:
-        raise HTTPException(status_code=404, detail="Farmer not found. Please register first.")
+# --- Voice Routes (Keep existing) ---
+class VoiceStartRequest(BaseModel):
+    language: str = "ta-IN"
 
-    # Calculate Center Point for Validation
-    lons = [p[0] for p in request.coordinates[0]]
-    lats = [p[1] for p in request.coordinates[0]]
-    center_lon = sum(lons) / len(lons)
-    center_lat = sum(lats) / len(lats)
+class VoiceTurnRequest(BaseModel):
+    session_id: str
+    language: str
+    current_field: str
+    transcript: str
+    farm_state: Dict[str, Any]
 
-    # Call Land Intelligence Service
-    farm_profile = land_service.generate_farm_profile(
-        request.coordinates, center_lat, center_lon
-    )
+@app.post("/api/voice/start")
+def voice_start(request: VoiceStartRequest):
+    try:
+        result = start_session(request.language)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    # Save Farm
-    farm_id = str(uuid.uuid4())
-    farms_db[farm_id] = {
-        "owner_id": request.farmer_id,
-        "boundary": request.coordinates,
-        "profile": farm_profile,
-        "area_hectares": 0.0 # Calculate actual area here if needed
-    }
+@app.post("/api/voice/turn")
+def voice_turn(request: VoiceTurnRequest):
+    try:
+        result = process_turn(request.session_id, request.transcript, request.current_field, request.language)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-    return {
-        "status": "success",
-        "farm_id": farm_id,
-        "validation_result": farm_profile,
-        "message": "Farm boundary validated successfully using GIS layers."
-    }
-
-@app.get("/api/land/check/{lat}/{lon}")
-async def quick_land_check(lat: float, lon: float):
-    """Quick endpoint to test Land Intelligence without creating a farm."""
-    context = land_service.get_admin_context(lat, lon)
-    land_use = land_service.validate_land_use(lat, lon)
-    return {**context, **land_use}
+# Import needed for StaticFiles
+from fastapi.staticfiles import StaticFiles
 
 if __name__ == "__main__":
     import uvicorn

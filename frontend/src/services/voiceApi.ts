@@ -1,36 +1,21 @@
-import axios from "axios";
+import axios from 'axios';
 
-import type {
-  VoiceLanguage,
-  VoiceStartResponse,
-  VoiceTurnRequest,
-  VoiceTurnResponse,
-} from "../types/voice";
+const API_BASE = 'http://localhost:8000';
 
-export async function startVoiceRegistration(
-  language: VoiceLanguage
-): Promise<VoiceStartResponse> {
-  const response =
-    await axios.get(
-      "/api/voice/registration/start",
-      {
-        params: {
-          language,
-        },
-      }
-    );
-
+export const startVoiceRegistration = async (language: string) => {
+  // Must use POST to match backend
+  const response = await axios.post(`${API_BASE}/api/voice/start`, { language });
   return response.data;
-}
+};
 
-export async function sendVoiceRegistrationTurn(
-  payload: VoiceTurnRequest
-): Promise<VoiceTurnResponse> {
-  const response =
-    await axios.post(
-      "/api/voice/registration/turn",
-      payload
-    );
-
+export const sendVoiceRegistrationTurn = async (data: {
+  session_id: string;
+  language: string;
+  current_field: string;
+  transcript: string;
+  farm_state: any;
+}) => {
+  // Must use POST to match backend
+  const response = await axios.post(`${API_BASE}/api/voice/turn`, data);
   return response.data;
-}
+};
