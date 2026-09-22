@@ -5,9 +5,14 @@ import SatelliteMap from "../components/farm/SatelliteMap";
 import { Button } from "../components/ui/button";
 import { Card } from "../components/ui/card";
 import { useGeolocation } from "../hooks/useGeolocation";
+const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN;
+
+if (!MAPBOX_TOKEN) {
+  console.error("Mapbox token is missing! Check frontend/.env file");
+}
 
 // ⚠️ REPLACE WITH YOUR REAL TOKEN
-const MAPBOX_TOKEN = "pk.eyJ1IjoicmF2aXByYWthc2gtYyIsImEiOiJjbXU3ZXNvN3owa2M1MnpzOW8weWI2cG8xIn0.ufdZweuqJFF1DYOumoGRtg";
+
 
 type FarmPolygonGeometry = {
   type: "Polygon";
