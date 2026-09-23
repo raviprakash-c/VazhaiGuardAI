@@ -1,21 +1,53 @@
-import axios from 'axios';
+import type {
+  VoiceLanguage,
+  VoiceStartResponse,
+  VoiceTurnRequest,
+  VoiceTurnResponse,
+} from "../types/voice";
 
-const API_BASE = 'http://localhost:8000';
+const API_BASE_URL = (
+  import.meta.env.VITE_API_BASE_URL ||
+  "http://127.0.0.1:8000"
+).replace(/\/$/, "");
 
-export const startVoiceRegistration = async (language: string) => {
-  // Must use POST to match backend
-  const response = await axios.post(`${API_BASE}/api/voice/start`, { language });
-  return response.data;
-};
+export async function startVoiceRegistration(
+  language: VoiceLanguage
+): Promise<VoiceStartResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/voice/registration/start?language=${encodeURIComponent(language)}`
+  );
 
-export const sendVoiceRegistrationTurn = async (data: {
-  session_id: string;
-  language: string;
-  current_field: string;
-  transcript: string;
-  farm_state: any;
-}) => {
-  // Must use POST to match backend
-  const response = await axios.post(`${API_BASE}/api/voice/turn`, data);
-  return response.data;
-};
+  if (!response.ok) {
+    throw new Error(
+      "Unable to start voice registration."
+    );
+  }
+
+  return response.json();
+}
+
+export async function sendVoiceRegistrationTurn(
+  payload: VoiceTurnRequest
+): Promise<VoiceTurnResponse> {
+  const response = await fetch(
+    `${API_BASE_URL}/voice/registration/turn`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    }
+  );
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+
+    throw new Error(
+      body?.detail ||
+      "Unable to process voice response."
+    );
+  }
+
+  return response.json();
+}

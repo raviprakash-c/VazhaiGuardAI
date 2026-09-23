@@ -1,17 +1,68 @@
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles  # <-- ADD THIS LINE
+
+from farm_map import router as farm_map_router
+from voice_registration import router as voice_registration_router
+from agents.orchestrator import router as orchestrator_router
+from pathlib import Path
+
+from fastapi import HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
-import os
-import uuid
 
-from services.voice_service import start_session, process_turn, get_empty_state, FIELD_ORDER, QUESTIONS_TA, QUESTIONS_EN, QUESTIONS_EN
+app = FastAPI(
+    title="VazhaiGuardAI",
+    version="2.0.0",
+    description="AI-powered banana farm intelligence platform",
+)
+# ============================================================
+# TAMIL VOICE AUDIO
+# ============================================================
 
-app = FastAPI(title="VazhaiGuardAI API")
+TAMIL_AUDIO_DIR = Path(__file__).resolve().parent / "generated_audio"
 
-# Enable CORS
+FIELD_AUDIO_FILES = {
+    "farm_name": "farm_name.mp3",
+    "total_farm_acres": "total_farm_acres.mp3",
+    "banana_area_acres": "banana_area_acres.mp3",
+    "banana_variety": "banana_variety.mp3",
+    "planting_age": "planting_age.mp3",
+    "approximate_plants": "approximate_plants.mp3",
+    "drainage": "drainage.mp3",
+    "support": "support.mp3",
+    "accessibility": "accessibility.mp3",
+}
+
+
+@app.get("/voice/tamil-audio/{field}")
+async def get_tamil_audio(field: str):
+
+    # Check whether requested field exists
+    if field not in FIELD_AUDIO_FILES:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Unknown Tamil voice field: {field}",
+        )
+
+    filename = FIELD_AUDIO_FILES[field]
+
+    audio_path = TAMIL_AUDIO_DIR / filename
+
+    print("[TamilVoice] Requested field:", field)
+    print("[TamilVoice] Audio path:", audio_path)
+    print("[TamilVoice] File exists:", audio_path.exists())
+
+    # Check whether MP3 exists
+    if not audio_path.exists():
+        raise HTTPException(
+            status_code=404,
+            detail=f"Tamil audio file not found: {audio_path}",
+        )
+
+    return FileResponse(
+        path=str(audio_path),
+        media_type="audio/mpeg",
+        filename=filename,
+    )
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -20,64 +71,24 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- Audio Setup (Keep existing) ---
-AUDIO_DIR = os.path.join(os.path.dirname(__file__), "generated_audio")
-if not os.path.exists(AUDIO_DIR):
-    os.makedirs(AUDIO_DIR)
-app.mount("/voice/tamil-audio", StaticFiles(directory=AUDIO_DIR), name="tamil-audio")
+# Core routes
+app.include_router(voice_registration_router)
+app.include_router(farm_map_router)
+app.include_router(orchestrator_router)
 
-# --- GIS Data Path ---
-GIS_DATA_PATH = os.path.join(os.path.dirname(__file__), "challenge_data", "task2_geojson")
 
-# --- New API: Serve Cadastral/Boundary Layers ---
-@app.get("/api/gis/layers/{layer_name}")
-async def get_gis_layer(layer_name: str):
-    """
-    Serves specific GeoJSON layers to the frontend map.
-    Usage: /api/gis/layers/Park_Cadastral_Map
-    """
-    file_path = os.path.join(GIS_DATA_PATH, f"{layer_name}.geojson")
-    
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail=f"Layer {layer_name} not found")
-    
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-        return JSONResponse(content=data)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error reading GeoJSON: {str(e)}")
+@app.get("/")
+def root():
+    return {
+        "status": "online",
+        "service": "VazhaiGuardAI",
+        "version": "2.0.0",
+    }
 
-# --- Voice Routes (Keep existing) ---
-class VoiceStartRequest(BaseModel):
-    language: str = "ta-IN"
 
-class VoiceTurnRequest(BaseModel):
-    session_id: str
-    language: str
-    current_field: str
-    transcript: str
-    farm_state: Dict[str, Any]
-
-@app.post("/api/voice/start")
-def voice_start(request: VoiceStartRequest):
-    try:
-        result = start_session(request.language)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/api/voice/turn")
-def voice_turn(request: VoiceTurnRequest):
-    try:
-        result = process_turn(request.session_id, request.transcript, request.current_field, request.language)
-        return result
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-# Import needed for StaticFiles
-from fastapi.staticfiles import StaticFiles
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+@app.get("/health")
+def health():
+    return {
+        "status": "healthy",
+        "service": "VazhaiGuardAI",
+    }

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import re
 from typing import Any, Dict
 
 import boto3
@@ -14,20 +13,17 @@ AWS_REGION = os.getenv(
 )
 
 
-# IMPORTANT:
-# Put the exact model ID that already works
-# in your voice_registration.py into the
-# environment variable below.
-#
-# Example:
-# $env:VAZHAIGUARD_TEXT_MODEL="..."
-#
+# Exact Bedrock model ID allowed
+# for your AWS account.
 TEXT_MODEL_ID = os.getenv(
     "VAZHAIGUARD_TEXT_MODEL"
 )
 
 
 def get_bedrock_client():
+    """
+    Create the Amazon Bedrock Runtime client.
+    """
 
     return boto3.client(
         "bedrock-runtime",
@@ -38,35 +34,105 @@ def get_bedrock_client():
 def extract_json(
     text: str,
 ) -> Dict[str, Any]:
+    """
+    Extract a JSON object from a Bedrock response.
+
+    Handles:
+    - pure JSON
+    - JSON inside Markdown code fences
+    - JSON surrounded by additional text
+    """
 
     cleaned = (
         text
         .replace("```json", "")
+        .replace("```JSON", "")
         .replace("```", "")
         .strip()
     )
 
+    # --------------------------------------------------------
+    # 1. Try complete response
+    # --------------------------------------------------------
+
     try:
-        return json.loads(
+
+        result = json.loads(
             cleaned
         )
 
-    except json.JSONDecodeError:
-
-        match = re.search(
-            r"\{.*\}",
-            cleaned,
-            re.DOTALL,
-        )
-
-        if not match:
+        if not isinstance(result, dict):
             raise ValueError(
-                "Bedrock did not return valid JSON."
+                "Bedrock JSON response "
+                "is not an object."
             )
 
-        return json.loads(
-            match.group(0)
+        return result
+
+    except json.JSONDecodeError:
+        pass
+
+    # --------------------------------------------------------
+    # 2. Find JSON object inside additional text
+    # --------------------------------------------------------
+
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+
+    if (
+        start == -1
+        or end == -1
+        or end <= start
+    ):
+
+        raise ValueError(
+            "Bedrock did not return "
+            "a JSON object."
         )
+
+    json_text = cleaned[
+        start:end + 1
+    ]
+
+    # --------------------------------------------------------
+    # 3. Parse extracted JSON
+    # --------------------------------------------------------
+
+    try:
+
+        result = json.loads(
+            json_text
+        )
+
+    except json.JSONDecodeError as error:
+
+        print(
+            "\n========== BEDROCK RAW RESPONSE =========="
+        )
+
+        print(
+            cleaned
+        )
+
+        print(
+            "========== END BEDROCK RESPONSE =========="
+        )
+
+        print(
+            "JSON ERROR:",
+            error,
+        )
+
+        raise
+
+    if not isinstance(result, dict):
+
+        raise ValueError(
+            "Bedrock JSON response "
+            "is not an object."
+        )
+
+    return result
 
 
 def create_farm_profile(
@@ -75,6 +141,13 @@ def create_farm_profile(
     boundary: Dict[str, Any],
     mapped_area_acres: float,
 ) -> Dict[str, Any]:
+    """
+    Create an AI farm profile using Amazon Bedrock.
+
+    The model must only use information supplied
+    by the farmer/application and must not invent
+    missing agricultural information.
+    """
 
     if not TEXT_MODEL_ID:
 
@@ -90,7 +163,7 @@ for VazhaiGuard AI.
 This is a Tamil Nadu banana farm.
 
 Create a structured farm intelligence profile
-from ONLY the information provided.
+using ONLY the information provided below.
 
 Do not invent missing information.
 
@@ -98,29 +171,32 @@ FARMER REGISTRATION:
 {json.dumps(
     farm_profile,
     ensure_ascii=False,
-    indent=2
+    indent=2,
+    default=str,
 )}
 
 FARM LOCATION:
 {json.dumps(
     location,
     ensure_ascii=False,
-    indent=2
+    indent=2,
+    default=str,
 )}
 
 FARM BOUNDARY:
 {json.dumps(
     boundary,
     ensure_ascii=False,
-    indent=2
+    indent=2,
+    default=str,
 )}
 
 MAPPED AREA:
 {mapped_area_acres} acres
 
-Return STRICT JSON.
+Return STRICT JSON only.
 
-Required structure:
+Required JSON structure:
 
 {{
   "farm_summary": {{
@@ -134,8 +210,7 @@ Required structure:
 
   "land": {{
     "registered_area_acres": null,
-    "mapped_area_acres": {mapped_area_acres},
-    "area_difference_note": ""
+    "mapped_area_acres": {mapped_area_acres}
   }},
 
   "field_conditions": {{
@@ -164,8 +239,13 @@ Rules:
 5. Mapped area is a geographic measurement.
 6. Missing information must remain missing.
 7. Keep confidence between 0 and 1.
-8. This profile will later be used by
-   planting, growth and StormGuard modules.
+8. Use "banana" as the crop.
+9. Preserve farmer-provided values accurately.
+10. Do not add information that was not provided.
+11. Return valid JSON.
+12. Do not use Markdown code fences.
+13. The profile will later be used by
+    planting, growth and StormGuard modules.
 """
 
     client = get_bedrock_client()
@@ -185,24 +265,103 @@ Rules:
         ],
 
         inferenceConfig={
-            "maxTokens": 1000,
+            "maxTokens": 1200,
             "temperature": 0.0,
             "topP": 0.9,
         },
     )
 
-    output_text = (
-        response[
-            "output"
-        ][
-            "message"
-        ][
-            "content"
-        ][0][
-            "text"
-        ]
+    output = (
+        response
+        .get("output", {})
+        .get("message", {})
+        .get("content", [])
     )
+
+    if not output:
+
+        raise RuntimeError(
+            "Bedrock returned an empty response."
+        )
+
+    output_text = output[0].get(
+        "text"
+    )
+
+    if not output_text:
+
+        raise RuntimeError(
+            "Bedrock response did not contain text."
+        )
 
     return extract_json(
         output_text
     )
+
+
+def generate_text(
+    prompt: str,
+    model_id: str | None = None,
+    max_tokens: int = 400,
+    temperature: float = 0.0,
+) -> str:
+    """
+    General-purpose Bedrock text generation.
+    """
+
+    selected_model = (
+        model_id or TEXT_MODEL_ID
+    )
+
+    if not selected_model:
+
+        raise RuntimeError(
+            "No Bedrock model ID configured."
+        )
+
+    client = get_bedrock_client()
+
+    response = client.converse(
+        modelId=selected_model,
+
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {
+                        "text": prompt
+                    }
+                ],
+            }
+        ],
+
+        inferenceConfig={
+            "maxTokens": max_tokens,
+            "temperature": temperature,
+        },
+    )
+
+    content = (
+        response
+        .get("output", {})
+        .get("message", {})
+        .get("content", [])
+    )
+
+    if not content:
+
+        raise RuntimeError(
+            "Bedrock returned an empty response."
+        )
+
+    text = content[0].get(
+        "text"
+    )
+
+    if not text:
+
+        raise RuntimeError(
+            "Bedrock response did not contain text."
+        )
+
+    return text

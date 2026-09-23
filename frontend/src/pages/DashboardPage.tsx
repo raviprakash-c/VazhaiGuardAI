@@ -5,8 +5,8 @@ import { useNavigate } from "react-router-dom";
 import {
   Mic,
   ArrowRight,
-  
 } from "lucide-react";
+
 import {
   CloudRain,
   CloudSun,
@@ -33,11 +33,23 @@ export default function DashboardPage() {
   const navigate = useNavigate();
 
   const {
-    coords,
-    isLocating,
-    locationError,
+    latitude,
+    longitude,
+    accuracy,
+    loading: isLocating,
+    error: locationError,
     getCurrentLocation,
   } = useGeolocation();
+
+  const coords =
+    latitude !== null && longitude !== null
+      ? {
+          latitude,
+          longitude,
+          accuracy,
+        }
+      : null;
+
   const {
     weather,
     isLoadingWeather,
@@ -52,6 +64,7 @@ export default function DashboardPage() {
       coords.latitude,
       coords.longitude
     );
+
     // fetchWeather intentionally excluded because
     // the hook function may be recreated on render.
     // eslint-disable-next-line react-hooks/exhaustive-deps

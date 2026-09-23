@@ -1,217 +1,269 @@
-import type {
-  RegistrationField,
-} from "../types/voice";
+export type VoiceLanguage = "ta-IN" | "en-IN";
 
+export type TamilVoiceField =
+  | "farm_name"
+  | "total_farm_acres"
+  | "banana_area_acres"
+  | "banana_variety"
+  | "planting_age"
+  | "approximate_plants"
+  | "drainage"
+  | "support"
+  | "accessibility";
 
-const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL ||
-  "http://127.0.0.1:8000"
-).replace(/\/$/, "");
+export type RegistrationField =
+  | "farm_name"
+  | "total_farm_acres"
+  | "banana_area_acres"
+  | "banana_variety"
+  | "planting_age"
+  | "approximate_plants"
+  | "drainage"
+  | "support"
+  | "accessibility"
+  | "complete";
 
+const API_BASE_URL = "http://127.0.0.1:8000";
 
-const TAMIL_AUDIO_BASE_URL =
-  `${API_BASE_URL}/voice/tamil-audio`;
+let currentAudio: HTMLAudioElement | null = null;
 
-
-let activeAudio:
-  | HTMLAudioElement
-  | null = null;
-
-
-function audioUrl(
-  field: string
-) {
-  return (
-    `${TAMIL_AUDIO_BASE_URL}/` +
-    encodeURIComponent(field) +
-    `?t=${Date.now()}`
-  );
-}
-
-
-function stopCurrentAudio() {
-  if (!activeAudio) {
+/**
+ * Stop currently playing Tamil audio.
+ */
+export const stopTamilQuestion = (): void => {
+  if (!currentAudio) {
     return;
   }
 
-  activeAudio.pause();
-
-  activeAudio.currentTime = 0;
-
-  activeAudio.src = "";
-
-  activeAudio = null;
-}
-
-
-export function stopTamilQuestion() {
-  stopCurrentAudio();
-}
-
-
-function playAudio(
-  source: string
-): Promise<void> {
-
-  return new Promise(
-    (resolve, reject) => {
-
-      stopCurrentAudio();
-
-      const audio =
-        new Audio(source);
-
-      activeAudio =
-        audio;
-
-      audio.preload =
-        "auto";
-
-      audio.volume =
-        1;
-
-      audio.oncanplay = () => {
-        console.log(
-          "[TamilVoice] Audio ready:",
-          source
-        );
-      };
-
-      audio.onplay = () => {
-        console.log(
-          "[TamilVoice] Playing:",
-          source
-        );
-      };
-
-      audio.onended = () => {
-        activeAudio =
-          null;
-
-        resolve();
-      };
-
-      audio.onerror = () => {
-
-        console.error(
-          "[TamilVoice] Audio load failed:",
-          source,
-          audio.error
-        );
-
-        activeAudio =
-          null;
-
-        reject(
-          new Error(
-            "Tamil audio could not be loaded"
-          )
-        );
-      };
-
-
-      audio
-        .play()
-        .catch(
-          (error) => {
-
-            console.error(
-              "[TamilVoice] Browser blocked playback:",
-              error
-            );
-
-            activeAudio =
-              null;
-
-            reject(error);
-          }
-        );
-    }
-  );
-}
-
-
-export async function playTamilQuestion(
-  field: RegistrationField
-) {
   try {
-
-    await playAudio(
-      audioUrl(field)
-    );
-
+    currentAudio.pause();
+    currentAudio.currentTime = 0;
+    currentAudio.removeAttribute("src");
+    currentAudio.load();
   } catch (error) {
-
-    console.error(
-      "Tamil question playback failed:",
-      error
+    console.warn(
+      "[TamilVoice] Could not stop current audio:",
+      error,
     );
-
-    throw error;
   }
-}
 
+  currentAudio = null;
+};
 
-export async function playTamilAcceptedTurn(
-  nextField: RegistrationField
-) {
-  try {
+/**
+ * Check whether a registration field has Tamil audio.
+ */
+const isTamilVoiceField = (
+  field: RegistrationField | string | null | undefined,
+): field is TamilVoiceField => {
+  return (
+    field === "farm_name" ||
+    field === "total_farm_acres" ||
+    field === "banana_area_acres" ||
+    field === "banana_variety" ||
+    field === "planting_age" ||
+    field === "approximate_plants" ||
+    field === "drainage" ||
+    field === "support" ||
+    field === "accessibility"
+  );
+};
 
-    if (
-      nextField ===
-      "complete"
-    ) {
+/**
+ * Play Tamil question audio for a registration field.
+ */
+export const playTamilQuestion = async (
+  field: RegistrationField | string,
+): Promise<void> => {
+  if (!isTamilVoiceField(field)) {
+    console.warn(
+      "[TamilVoice] No Tamil audio available for field:",
+      field,
+    );
+    return;
+  }
 
-      await playTamilQuestion(
-        "complete"
+  stopTamilQuestion();
+
+  const url =
+    `${API_BASE_URL}/voice/tamil-audio/${encodeURIComponent(field)}` +
+    `?t=${Date.now()}`;
+
+  console.log("[TamilVoice] Playing:", url);
+
+  const audio = new Audio();
+
+  currentAudio = audio;
+
+  audio.preload = "auto";
+
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+
+    const cleanup = () => {
+      audio.onloadeddata = null;
+      audio.oncanplay = null;
+      audio.oncanplaythrough = null;
+      audio.onerror = null;
+      audio.onended = null;
+    };
+
+    const finishSuccess = () => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      cleanup();
+
+      if (currentAudio === audio) {
+        currentAudio = null;
+      }
+
+      resolve();
+    };
+
+    const finishError = (error: Error) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+
+      cleanup();
+
+      if (currentAudio === audio) {
+        currentAudio = null;
+      }
+
+      reject(error);
+    };
+
+    audio.onloadeddata = () => {
+      console.log(
+        "[TamilVoice] Audio loaded:",
+        url,
+      );
+    };
+
+    audio.oncanplay = () => {
+      console.log(
+        "[TamilVoice] Audio can play:",
+        url,
+      );
+    };
+
+    audio.oncanplaythrough = async () => {
+      if (settled) {
+        return;
+      }
+
+      try {
+        console.log(
+          "[TamilVoice] Starting playback:",
+          url,
+        );
+
+        await audio.play();
+
+        console.log(
+          "[TamilVoice] Playback started:",
+          url,
+        );
+      } catch (error) {
+        console.error(
+          "[TamilVoice] Browser blocked playback:",
+          error,
+        );
+
+        finishError(
+          new Error(
+            `Tamil audio playback failed: ${
+              error instanceof Error
+                ? error.message
+                : String(error)
+            }`,
+          ),
+        );
+      }
+    };
+
+    audio.onerror = () => {
+      console.error(
+        "[TamilVoice] Audio load failed:",
+        url,
+        audio.error,
       );
 
-      return;
-    }
+      finishError(
+        new Error(
+          "Tamil audio could not be loaded. " +
+            "Check that the FastAPI endpoint exists " +
+            "and returns a valid audio file.",
+        ),
+      );
+    };
 
+    audio.onended = () => {
+      console.log(
+        "[TamilVoice] Playback finished:",
+        field,
+      );
 
-    await playAudio(
-      audioUrl(
-        "confirmed"
-      )
+      finishSuccess();
+    };
+
+    audio.src = url;
+
+    audio.load();
+  });
+};
+
+/**
+ * Play Tamil audio after an answer was accepted.
+ */
+export const playTamilAcceptedTurn = async (
+  field: RegistrationField | string,
+): Promise<void> => {
+  if (field === "complete") {
+    console.log(
+      "[TamilVoice] Registration complete. No next question.",
     );
-
-
-    await playTamilQuestion(
-      nextField
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Tamil accepted turn failed:",
-      error
-    );
+    return;
   }
-}
 
-
-export async function playTamilRetry(
-  currentField: RegistrationField
-) {
-  try {
-
-    await playAudio(
-      audioUrl(
-        "retry"
-      )
+  if (!isTamilVoiceField(field)) {
+    console.warn(
+      "[TamilVoice] Invalid accepted field:",
+      field,
     );
-
-
-    await playTamilQuestion(
-      currentField
-    );
-
-  } catch (error) {
-
-    console.error(
-      "Tamil retry playback failed:",
-      error
-    );
+    return;
   }
-}
+
+  return playTamilQuestion(field);
+};
+
+/**
+ * Play Tamil audio when the user's answer needs to be retried.
+ */
+export const playTamilRetry = async (
+  field: RegistrationField | string,
+): Promise<void> => {
+  if (field === "complete") {
+    console.log(
+      "[TamilVoice] Cannot retry completed registration.",
+    );
+    return;
+  }
+
+  if (!isTamilVoiceField(field)) {
+    console.warn(
+      "[TamilVoice] Invalid retry field:",
+      field,
+    );
+    return;
+  }
+
+  return playTamilQuestion(field);
+};

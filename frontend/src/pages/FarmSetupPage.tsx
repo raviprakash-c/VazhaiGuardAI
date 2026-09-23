@@ -69,11 +69,22 @@ export default function FarmSetupPage() {
     );
 
   const {
-    coords,
-    isLocating,
-    locationError,
-    getCurrentLocation,
-  } = useGeolocation();
+  latitude,
+  longitude,
+  accuracy,
+  loading: isLocating,
+  error: locationError,
+  getCurrentLocation,
+} = useGeolocation();
+
+const coords =
+  latitude !== null && longitude !== null
+    ? {
+        latitude,
+        longitude,
+        accuracy,
+      }
+    : null;
 
   /* =======================================================
      SYNC GPS LOCATION
@@ -377,9 +388,7 @@ export default function FarmSetupPage() {
               isLocating={
                 isLocating
               }
-              error={
-                locationError
-              }
+              error={locationError ?? ""}
               onGetLocation={
                 getCurrentLocation
               }

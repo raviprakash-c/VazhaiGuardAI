@@ -94,6 +94,45 @@ def verify_profile(
 def build_next_questions(
     ai_profile: Dict[str, Any],
 ) -> list[str]:
+    missing = ai_profile.get("missing_information", [])
+    questions = []
+
+    question_map = {
+        "soil_type": "Do you know your soil type or soil test result?",
+        "water_source": "What is your main water source for the banana crop?",
+        "water_source_and_availability": "What is your main water source for the banana crop?",
+        "irrigation_method": "What irrigation method do you use?",
+        "fertilizer_or_pest_control_history": (
+            "Can you tell me about your fertilizer or pest control practices?"
+        ),
+        "yield_history": "Do you know your previous banana yield?",
+        "legal_ownership_status": "What is the ownership status of this farm?",
+        "farm_ownership_status": "What is the ownership status of this farm?",
+        "land_use_permissions": "Do you have the required permission to use this land for farming?",
+        "pest_disease_history": "Have you noticed any pest or disease problems before?",
+        "agronomic_practices": "Can you tell me about your usual farming practices?",
+    }
+
+    for item in missing:
+        if isinstance(item, dict):
+            key = str(item.get("key", "")).strip().lower()
+        else:
+            key = str(item).strip().lower()
+
+        if not key:
+            continue
+
+        question = question_map.get(key)
+
+        if question:
+            questions.append(question)
+        else:
+            readable = key.replace("_", " ").strip()
+            questions.append(
+                f"Can you provide information about {readable}?"
+            )
+
+    return questions[:5]
 
     missing = ai_profile.get(
         "missing_information",
@@ -244,18 +283,10 @@ def create_profile(
     )
 
     return {
-        "farm_id":
-            farm_id,
-
-        "profile_status":
-            "PROFILE_READY",
-
-        "profile":
-            ai_profile,
-
-        "next_questions":
-            next_questions,
-
-        "verification":
-            verification,
-    }
+    "farm_id": farm_id,
+    "saved": True,
+    "profile_status": "PROFILE_READY",
+    "profile": ai_profile,
+    "next_questions": next_questions,
+    "verification": verification,
+}

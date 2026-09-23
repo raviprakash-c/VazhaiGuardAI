@@ -8,7 +8,6 @@ from typing import Any, Dict, List
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-
 from agents.farm_profile_agent import (
     create_profile,
 )
@@ -18,6 +17,9 @@ from schemas.farm_profile import (
     FarmProfileResponse,
 )
 
+from services.dynamodb_service import (
+    save_farm,
+)
 
 router = APIRouter(
     prefix="/farm",
@@ -213,6 +215,22 @@ def save_farm_location(
             farms
         )
 
+        save_farm(
+            farm_id=farm_id,
+            farm_profile=request.farm_profile,
+            location=request.location.model_dump(),
+            boundary=request.boundary.model_dump(),
+            mapped_area_acres=request.mapped_area_acres,
+            perimeter_m=request.perimeter_m,
+            farmer_confirmed=request.farmer_confirmed,
+            boundary_source=request.boundary_source,
+        )
+
+        print(
+            "[FARM] Saved to DynamoDB:",
+            farm_id,
+        )
+
     except OSError as error:
         raise HTTPException(
             status_code=500,
@@ -222,6 +240,20 @@ def save_farm_location(
             ),
         ) from error
 
+    except Exception as error:
+        print(
+            "[FARM] DynamoDB save error:",
+            repr(error),
+        )
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Unable to save farm "
+                "to DynamoDB: "
+                + str(error)
+            ),
+        ) from error
     return FarmLocationSaveResponse(
         farm_id=farm_id,
 

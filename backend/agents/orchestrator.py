@@ -11,13 +11,8 @@ from schemas.agent import (
     RoutingDecision,
 )
 
-from services.bedrock_service import (
-    generate_text,
-)
-
-from services.model_router import (
-    route_request,
-)
+from services.bedrock_service import generate_text
+from services.model_router import route_request
 
 
 router = APIRouter(
@@ -77,7 +72,6 @@ def verify_agent_response(
     issues = []
 
     if not response_text.strip():
-
         issues.append(
             "Model returned an empty response."
         )
@@ -95,13 +89,11 @@ def verify_agent_response(
     for phrase in risky_phrases:
 
         if phrase in lowered:
-
             issues.append(
                 f"Potential unsupported claim: {phrase}"
             )
 
     if issues:
-
         return {
             "status": "NEEDS_REVIEW",
             "issues": issues,
@@ -124,87 +116,64 @@ def run_orchestrator(
     )
 
     # -----------------------------------------------------
-    # 1. ROUTE
+    # 1. ROUTER
     # -----------------------------------------------------
 
     route = route_request(
         user_query=request.user_query,
-
         has_image=has_image,
     )
 
     trace = [
-
         {
             "step": "router",
-
             "status": "completed",
-
             "task_type": route.task_type,
-
-            "selected_model":
-                route.selected_model,
-
-            "model_id":
-                route.model_id,
-
-            "reason":
-                route.reason,
+            "selected_model": route.selected_model,
+            "model_id": route.model_id,
+            "reason": route.reason,
         }
     ]
 
     # -----------------------------------------------------
-    # 2. BUILD PROMPT
+    # 2. PLANNER
     # -----------------------------------------------------
 
     prompt = build_prompt(
         request=request,
-
         task_type=route.task_type,
     )
 
     trace.append(
         {
             "step": "planner",
-
             "status": "completed",
-
             "action": (
-                "Prepared task-specific "
-                "prompt from farmer request "
-                "and farm context."
+                "Prepared task-specific prompt "
+                "from farmer request and farm context."
             ),
         }
     )
 
     # -----------------------------------------------------
-    # 3. MODEL EXECUTION
+    # 3. PRIMARY MODEL EXECUTION
     # -----------------------------------------------------
 
     try:
 
         response_text = generate_text(
-
             prompt=prompt,
-
             model_id=route.model_id,
-
-            max_tokens=800,
-
+            max_tokens=400,
             temperature=0.2,
         )
 
         trace.append(
             {
                 "step": "model",
-
                 "status": "completed",
-
-                "model":
-                    route.selected_model,
-
-                "model_id":
-                    route.model_id,
+                "model": route.selected_model,
+                "model_id": route.model_id,
             }
         )
 
@@ -213,46 +182,34 @@ def run_orchestrator(
         trace.append(
             {
                 "step": "model",
-
                 "status": "failed",
-
-                "model":
-                    route.selected_model,
-
-                "error":
-                    str(primary_error),
+                "model": route.selected_model,
+                "model_id": route.model_id,
+                "error": str(primary_error),
             }
         )
 
         # -------------------------------------------------
-        # FALLBACK
+        # 4. FALLBACK MODEL
         # -------------------------------------------------
 
         if not route.fallback_model:
-
             raise
 
         try:
 
             response_text = generate_text(
-
                 prompt=prompt,
-
                 model_id=route.fallback_model,
-
-                max_tokens=800,
-
+                max_tokens=400,
                 temperature=0.2,
             )
 
             trace.append(
                 {
                     "step": "fallback",
-
                     "status": "completed",
-
-                    "fallback_model":
-                        route.fallback_model,
+                    "fallback_model": route.fallback_model,
                 }
             )
 
@@ -261,11 +218,8 @@ def run_orchestrator(
             trace.append(
                 {
                     "step": "fallback",
-
                     "status": "failed",
-
-                    "error":
-                        str(fallback_error),
+                    "error": str(fallback_error),
                 }
             )
 
@@ -274,30 +228,28 @@ def run_orchestrator(
             ) from fallback_error
 
     # -----------------------------------------------------
-    # 4. VERIFICATION
+    # 5. VERIFIER
     # -----------------------------------------------------
 
-    verification = (
-        verify_agent_response(
-            response_text
-        )
+    verification = verify_agent_response(
+        response_text
     )
 
     trace.append(
         {
             "step": "verifier",
-
             "status": (
                 "completed"
-                if verification["status"]
-                == "VERIFIED"
+                if verification["status"] == "VERIFIED"
                 else "needs_review"
             ),
-
-            "verification":
-                verification,
+            "verification": verification,
         }
     )
+
+    # -----------------------------------------------------
+    # 6. LATENCY
+    # -----------------------------------------------------
 
     elapsed_ms = round(
         (
@@ -311,53 +263,43 @@ def run_orchestrator(
     trace.append(
         {
             "step": "complete",
-
             "status": "completed",
-
-            "latency_ms":
-                elapsed_ms,
+            "latency_ms": elapsed_ms,
         }
     )
+
+    # -----------------------------------------------------
+    # 7. FINAL RESPONSE
+    # -----------------------------------------------------
 
     return {
         "success": True,
 
-        "farm_id":
-            request.farm_id,
+        "farm_id": request.farm_id,
 
-        "user_query":
-            request.user_query,
+        "user_query": request.user_query,
 
-        "task_type":
-            route.task_type,
+        "task_type": route.task_type,
 
-        "response":
-            response_text,
+        "response": response_text,
 
         "routing": RoutingDecision(
-
             task_type=route.task_type,
-
-            selected_model=
-                route.selected_model,
-
-            model_id=
-                route.model_id,
-
-            reason=
-                route.reason,
-
-            fallback_model=
-                route.fallback_model,
+            selected_model=route.selected_model,
+            model_id=route.model_id,
+            reason=route.reason,
+            fallback_model=route.fallback_model,
         ).model_dump(),
 
-        "verification":
-            verification,
+        "verification": verification,
 
-        "trace":
-            trace,
+        "trace": trace,
     }
 
+
+# =========================================================
+# API ENDPOINT
+# =========================================================
 
 @router.post(
     "/run",
@@ -382,13 +324,16 @@ def run_agent(
 
         raise HTTPException(
             status_code=500,
-
             detail=(
                 "Agent execution failed: "
                 + str(error)
             ),
         ) from error
 
+
+# =========================================================
+# HEALTH CHECK
+# =========================================================
 
 @router.get(
     "/health"
