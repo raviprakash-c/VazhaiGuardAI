@@ -225,3 +225,32 @@ def update_ai_profile(
                 ).isoformat(),
         },
     )
+
+def save_farm_zones(
+    farm_id: str,
+    zones: list,
+    total_area_acres: float,
+) -> Dict[str, Any]:
+
+    table = get_table()
+
+    item = {
+        "farm_id": farm_id,
+        "record_type": "zones",
+        "zone_count": len(zones),
+        "total_area_acres": to_dynamodb_value(
+            total_area_acres
+        ),
+        "zones": to_dynamodb_value(
+            zones
+        ),
+        "updated_at": datetime.now(
+            timezone.utc
+        ).isoformat(),
+    }
+
+    table.put_item(
+        Item=item
+    )
+
+    return item
