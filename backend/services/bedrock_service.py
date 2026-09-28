@@ -7,29 +7,81 @@ from typing import Any, Dict
 import boto3
 
 
+# ============================================================
+# AWS CONFIGURATION
+# ============================================================
+
+# IMPORTANT:
+# Your FAI team approved the VazhaiGuard SSO profile.
+#
+# PowerShell:
+#   $env:AWS_PROFILE="vazhaiguard"
+#   $env:AWS_REGION="ap-south-1"
+#
+# These defaults also make sure the application does not
+# accidentally use the expired "default" AWS profile.
+
+AWS_PROFILE = os.getenv(
+    "AWS_PROFILE",
+    "vazhaiguard",
+)
+
 AWS_REGION = os.getenv(
     "AWS_REGION",
     "ap-south-1",
 )
 
-
-# Exact Bedrock model ID allowed
-# for your AWS account.
 TEXT_MODEL_ID = os.getenv(
-    "VAZHAIGUARD_TEXT_MODEL"
+    "VAZHAIGUARD_TEXT_MODEL",
+    "mistral.ministral-3-8b-instruct",
 )
 
 
+# ============================================================
+# AWS SESSION
+# ============================================================
+
+# Explicitly create the boto3 session using the VazhaiGuard
+# AWS IAM Identity Center / SSO profile.
+#
+# This is important because boto3 otherwise previously selected:
+#
+#     PROFILE: default
+#     METHOD: shared-credentials-file
+#
+# which contained expired credentials.
+#
+# We now explicitly select:
+#
+#     PROFILE: vazhaiguard
+#     METHOD: sso
+#     REGION: ap-south-1
+
+session = boto3.Session(
+    profile_name=AWS_PROFILE,
+    region_name=AWS_REGION,
+)
+
+
+# ============================================================
+# BEDROCK CLIENT
+# ============================================================
+
 def get_bedrock_client():
     """
-    Create the Amazon Bedrock Runtime client.
+    Create the Amazon Bedrock Runtime client using the
+    VazhaiGuard AWS SSO session.
     """
 
-    return boto3.client(
+    return session.client(
         "bedrock-runtime",
         region_name=AWS_REGION,
     )
 
+
+# ============================================================
+# JSON EXTRACTION
+# ============================================================
 
 def extract_json(
     text: str,
@@ -38,9 +90,9 @@ def extract_json(
     Extract a JSON object from a Bedrock response.
 
     Handles:
-    - pure JSON
-    - JSON inside Markdown code fences
-    - JSON surrounded by additional text
+    1. Pure JSON
+    2. JSON inside Markdown code fences
+    3. JSON surrounded by additional text
     """
 
     cleaned = (
@@ -52,16 +104,15 @@ def extract_json(
     )
 
     # --------------------------------------------------------
-    # 1. Try complete response
+    # 1. Try parsing the complete response
     # --------------------------------------------------------
 
     try:
 
-        result = json.loads(
-            cleaned
-        )
+        result = json.loads(cleaned)
 
         if not isinstance(result, dict):
+
             raise ValueError(
                 "Bedrock JSON response "
                 "is not an object."
@@ -110,9 +161,7 @@ def extract_json(
             "\n========== BEDROCK RAW RESPONSE =========="
         )
 
-        print(
-            cleaned
-        )
+        print(cleaned)
 
         print(
             "========== END BEDROCK RESPONSE =========="
@@ -134,6 +183,10 @@ def extract_json(
 
     return result
 
+
+# ============================================================
+# CREATE FARM PROFILE
+# ============================================================
 
 def create_farm_profile(
     farm_profile: Dict[str, Any],
@@ -250,26 +303,59 @@ Rules:
 
     client = get_bedrock_client()
 
-    response = client.converse(
-        modelId=TEXT_MODEL_ID,
+    try:
 
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "text": prompt
-                    }
-                ]
-            }
-        ],
+        response = client.converse(
+            modelId=TEXT_MODEL_ID,
 
-        inferenceConfig={
-            "maxTokens": 1200,
-            "temperature": 0.0,
-            "topP": 0.9,
-        },
-    )
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "text": prompt
+                        }
+                    ],
+                }
+            ],
+
+            inferenceConfig={
+                "maxTokens": 1200,
+                "temperature": 0.0,
+                "topP": 0.9,
+            },
+        )
+
+    except Exception as error:
+
+        print(
+            "\n========== BEDROCK ERROR =========="
+        )
+
+        print(
+            repr(error)
+        )
+
+        print(
+            "AWS PROFILE:",
+            AWS_PROFILE,
+        )
+
+        print(
+            "AWS REGION:",
+            AWS_REGION,
+        )
+
+        print(
+            "MODEL:",
+            TEXT_MODEL_ID,
+        )
+
+        print(
+            "========== END BEDROCK ERROR =========="
+        )
+
+        raise
 
     output = (
         response
@@ -299,6 +385,10 @@ Rules:
     )
 
 
+# ============================================================
+# GENERAL TEXT GENERATION
+# ============================================================
+
 def generate_text(
     prompt: str,
     model_id: str | None = None,
@@ -321,25 +411,58 @@ def generate_text(
 
     client = get_bedrock_client()
 
-    response = client.converse(
-        modelId=selected_model,
+    try:
 
-        messages=[
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "text": prompt
-                    }
-                ],
-            }
-        ],
+        response = client.converse(
+            modelId=selected_model,
 
-        inferenceConfig={
-            "maxTokens": max_tokens,
-            "temperature": temperature,
-        },
-    )
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {
+                            "text": prompt
+                        }
+                    ],
+                }
+            ],
+
+            inferenceConfig={
+                "maxTokens": max_tokens,
+                "temperature": temperature,
+            },
+        )
+
+    except Exception as error:
+
+        print(
+            "\n========== BEDROCK ERROR =========="
+        )
+
+        print(
+            repr(error)
+        )
+
+        print(
+            "AWS PROFILE:",
+            AWS_PROFILE,
+        )
+
+        print(
+            "AWS REGION:",
+            AWS_REGION,
+        )
+
+        print(
+            "MODEL:",
+            selected_model,
+        )
+
+        print(
+            "========== END BEDROCK ERROR =========="
+        )
+
+        raise
 
     content = (
         response

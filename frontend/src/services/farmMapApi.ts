@@ -4,10 +4,20 @@ export type FarmMapLocationPayload = {
   label?: string;
 };
 
-export type FarmPolygonPayload = {
-  type: "Polygon";
-  coordinates: [number, number][][];
-};
+export type FarmPolygonPayload =
+  | {
+      type: "Polygon";
+      coordinates: [number, number][][];
+    }
+  | {
+      type: "MultiPolygon";
+      coordinates: [number, number][][][];
+    };
+
+export type BoundarySource =
+  | "cadastral_parcel"
+  | "cadastral_edited"
+  | "farmer_drawn_satellite";
 
 export type FarmLocationSaveRequest = {
   farm_profile: Record<string, unknown>;
@@ -22,7 +32,11 @@ export type FarmLocationSaveRequest = {
 
   farmer_confirmed: true;
 
-  boundary_source: "farmer_drawn_satellite";
+  boundary_source: BoundarySource;
+
+  parcel_id?: string;
+
+  parcel_metadata?: Record<string, unknown>;
 };
 
 export type FarmLocationSaveResponse = {
@@ -41,12 +55,11 @@ export type FarmLocationSaveResponse = {
   farmer_confirmed: boolean;
 
   boundary_source: string;
+
+  parcel_id?: string;
+
+  parcel_metadata?: Record<string, unknown>;
 };
-
-
-/* =========================================================
-   AI FARM PROFILE
-   ========================================================= */
 
 export type CreateFarmProfileRequest = {
   farm_id: string;
@@ -63,9 +76,12 @@ export type CreateFarmProfileRequest = {
 
   farmer_confirmed: true;
 
-  boundary_source: "farmer_drawn_satellite";
-};
+  boundary_source: BoundarySource;
 
+  parcel_id?: string;
+
+  parcel_metadata?: Record<string, unknown>;
+};
 
 export type CreateFarmProfileResponse = {
   farm_id: string;
@@ -78,133 +94,78 @@ export type CreateFarmProfileResponse = {
 
   verification: {
     status: string;
-
     issues: string[];
-
     checked_fields: string[];
   };
 };
-
-
-/* =========================================================
-   API BASE URL
-   ========================================================= */
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL ||
   "http://127.0.0.1:8000"
 ).replace(/\/$/, "");
 
-
-/* =========================================================
-   SAVE FARM LOCATION
-   ========================================================= */
-
 export async function saveFarmLocation(
   payload: FarmLocationSaveRequest
 ): Promise<FarmLocationSaveResponse> {
-
   const response = await fetch(
     `${API_BASE_URL}/farm/location`,
     {
       method: "POST",
-
       headers: {
-        "Content-Type":
-          "application/json",
+        "Content-Type": "application/json",
       },
-
-      body: JSON.stringify(
-        payload
-      ),
+      body: JSON.stringify(payload),
     }
   );
 
-
   if (!response.ok) {
-
-    let message =
-      "Unable to save farm location.";
+    let message = "Unable to save farm location.";
 
     try {
+      const body = await response.json();
 
-      const body =
-        (await response.json()) as {
-          detail?: string;
-        };
-
-      if (body.detail) {
+      if (body?.detail) {
         message = body.detail;
       }
-
     } catch {
       // Keep default error.
     }
 
-    throw new Error(
-      message
-    );
+    throw new Error(message);
   }
 
-
-  return (
-    await response.json()
-  ) as FarmLocationSaveResponse;
+  return response.json();
 }
-
-
-/* =========================================================
-   CREATE AI FARM PROFILE
-   ========================================================= */
 
 export async function createFarmProfile(
   payload: CreateFarmProfileRequest
 ): Promise<CreateFarmProfileResponse> {
-
   const response = await fetch(
     `${API_BASE_URL}/farm/profile`,
     {
       method: "POST",
-
       headers: {
-        "Content-Type":
-          "application/json",
+        "Content-Type": "application/json",
       },
-
-      body: JSON.stringify(
-        payload
-      ),
+      body: JSON.stringify(payload),
     }
   );
 
-
   if (!response.ok) {
-
-    let message =
-      "Unable to create AI farm profile.";
+    let message = "Unable to create AI farm profile.";
 
     try {
+      const body = await response.json();
 
-      const body =
-        (await response.json()) as {
-          detail?: string;
-        };
-
-      if (body.detail) {
+      if (body?.detail) {
         message = body.detail;
       }
-
     } catch {
       // Keep default error.
     }
 
-    throw new Error(
-      message
-    );
+    throw new Error(message);
   }
 
-
-  return (
-    await response.json()
-  ) as CreateFarmProfileResponse;
+  return response.json();
 }

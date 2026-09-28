@@ -6,21 +6,31 @@ import {
 
 import AppShell from "./components/layout/AppShell";
 
-import DashboardPage from "./pages/DashboardPage";
-import FarmSetupPage from "./pages/FarmSetupPage";
-import VoiceRegistrationPage from "./pages/VoiceRegistrationPage";
-import FarmLocationPage from "./pages/FarmLocationPage";
-import FarmHomePage from "./pages/FarmHomePage";
-// Inside frontend/src/App.tsx
+import DashboardPage
+  from "./pages/DashboardPage";
 
+import FarmSetupPage
+  from "./pages/FarmSetupPage";
 
-// ... inside your Routes component ...
-//<Route path="/farm/location" element={<FarmLocationPage />} />
+import VoiceRegistrationPage
+  from "./pages/VoiceRegistrationPage";
+
+import FarmLocationPage
+  from "./pages/FarmLocationPage";
+
+import FarmHomePage
+  from "./pages/FarmHomePage";
+
 
 export default function App() {
+
   return (
+
     <Routes>
-      <Route element={<AppShell />}>
+
+      <Route
+        element={<AppShell />}
+      >
 
         <Route
           index
@@ -31,7 +41,7 @@ export default function App() {
             />
           }
         />
-         <Route path="/farm/location" element={<FarmLocationPage />} />
+
         <Route
           path="dashboard"
           element={
@@ -59,19 +69,14 @@ export default function App() {
             <FarmLocationPage />
           }
         />
-          <Route
-  path="farm/location"
-  element={
-    <FarmLocationPage />
-  }
-/>
 
-<Route
-  path="farm/home"
-  element={
-    <FarmHomePage />
-  }
-/>
+        <Route
+          path="farm/home"
+          element={
+            <FarmHomePage />
+          }
+        />
+
         <Route
           path="*"
           element={
@@ -83,6 +88,7 @@ export default function App() {
         />
 
       </Route>
+
     </Routes>
   );
 }

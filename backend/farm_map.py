@@ -3,23 +3,22 @@ from __future__ import annotations
 import json
 import uuid
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, Literal
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from agents.farm_profile_agent import (
-    create_profile,
-)
-
+from agents.farm_profile_agent import create_profile
 from schemas.farm_profile import (
     FarmProfileRequest,
     FarmProfileResponse,
 )
+from services.dynamodb_service import save_farm
 
-from services.dynamodb_service import (
-    save_farm,
-)
+
+# ============================================================
+# ROUTER
+# ============================================================
 
 router = APIRouter(
     prefix="/farm",
@@ -27,9 +26,9 @@ router = APIRouter(
 )
 
 
-# =========================================================
+# ============================================================
 # DATA MODELS
-# =========================================================
+# ============================================================
 
 class FarmMapLocation(BaseModel):
     latitude: float
@@ -38,8 +37,8 @@ class FarmMapLocation(BaseModel):
 
 
 class FarmPolygonGeometry(BaseModel):
-    type: str = "Polygon"
-    coordinates: List[List[List[float]]]
+    type: Literal["Polygon", "MultiPolygon"] = "Polygon"
+    coordinates: Any
 
 
 class FarmLocationSaveRequest(BaseModel):
@@ -61,6 +60,10 @@ class FarmLocationSaveRequest(BaseModel):
         "farmer_drawn_satellite"
     )
 
+    parcel_id: str | None = None
+
+    parcel_metadata: Dict[str, Any] | None = None
+
 
 class FarmLocationSaveResponse(BaseModel):
     farm_id: str
@@ -79,12 +82,18 @@ class FarmLocationSaveResponse(BaseModel):
 
     boundary_source: str
 
+    parcel_id: str | None = None
 
-# =========================================================
+    parcel_metadata: Dict[str, Any] | None = None
+
+
+# ============================================================
 # SIMPLE PROTOTYPE STORAGE
-# =========================================================
+# ============================================================
 
-DATA_DIR = Path(__file__).resolve().parent / "data"
+DATA_DIR = (
+    Path(__file__).resolve().parent / "data"
+)
 
 DATA_DIR.mkdir(
     parents=True,
@@ -132,9 +141,9 @@ def write_farms(
         )
 
 
-# =========================================================
+# ============================================================
 # SAVE FARM LOCATION
-# =========================================================
+# ============================================================
 
 @router.post(
     "/location",
@@ -143,15 +152,19 @@ def write_farms(
 def save_farm_location(
     request: FarmLocationSaveRequest,
 ):
-    if (
-        request.boundary.type
-        != "Polygon"
+    # --------------------------------------------------------
+    # Validate boundary
+    # --------------------------------------------------------
+
+    if request.boundary.type not in (
+        "Polygon",
+        "MultiPolygon",
     ):
         raise HTTPException(
             status_code=400,
             detail=(
-                "Farm boundary must "
-                "be a Polygon."
+                "Farm boundary must be "
+                "Polygon or MultiPolygon."
             ),
         )
 
@@ -159,28 +172,51 @@ def save_farm_location(
         raise HTTPException(
             status_code=400,
             detail=(
-                "Farm boundary "
-                "coordinates are required."
+                "Farm boundary coordinates "
+                "are required."
             ),
         )
+
+    # --------------------------------------------------------
+    # Validate area
+    # --------------------------------------------------------
 
     if request.mapped_area_acres <= 0:
         raise HTTPException(
             status_code=400,
             detail=(
-                "Mapped farm area "
-                "must be greater than zero."
+                "Mapped farm area must "
+                "be greater than zero."
             ),
         )
+
+    # --------------------------------------------------------
+    # Validate perimeter
+    # --------------------------------------------------------
+
+    if request.perimeter_m < 0:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Perimeter cannot be negative."
+            ),
+        )
+
+    # --------------------------------------------------------
+    # Generate canonical farm ID
+    # --------------------------------------------------------
 
     farm_id = (
         "farm_"
         + uuid.uuid4().hex[:10]
     )
 
+    # --------------------------------------------------------
+    # Build farm record
+    # --------------------------------------------------------
+
     farm_record = {
-        "farm_id":
-            farm_id,
+        "farm_id": farm_id,
 
         "farm_profile":
             request.farm_profile,
@@ -202,7 +238,17 @@ def save_farm_location(
 
         "boundary_source":
             request.boundary_source,
+
+        "parcel_id":
+            request.parcel_id,
+
+        "parcel_metadata":
+            request.parcel_metadata,
     }
+
+    # --------------------------------------------------------
+    # Save local JSON copy
+    # --------------------------------------------------------
 
     farms = read_farms()
 
@@ -211,25 +257,7 @@ def save_farm_location(
     )
 
     try:
-        write_farms(
-            farms
-        )
-
-        save_farm(
-            farm_id=farm_id,
-            farm_profile=request.farm_profile,
-            location=request.location.model_dump(),
-            boundary=request.boundary.model_dump(),
-            mapped_area_acres=request.mapped_area_acres,
-            perimeter_m=request.perimeter_m,
-            farmer_confirmed=request.farmer_confirmed,
-            boundary_source=request.boundary_source,
-        )
-
-        print(
-            "[FARM] Saved to DynamoDB:",
-            farm_id,
-        )
+        write_farms(farms)
 
     except OSError as error:
         raise HTTPException(
@@ -239,6 +267,41 @@ def save_farm_location(
                 "farm location."
             ),
         ) from error
+
+    # --------------------------------------------------------
+    # Save to DynamoDB
+    # --------------------------------------------------------
+
+    try:
+        save_farm(
+            farm_id=farm_id,
+
+            farm_profile=
+                request.farm_profile,
+
+            location=
+                request.location.model_dump(),
+
+            boundary=
+                request.boundary.model_dump(),
+
+            mapped_area_acres=
+                request.mapped_area_acres,
+
+            perimeter_m=
+                request.perimeter_m,
+
+            farmer_confirmed=
+                request.farmer_confirmed,
+
+            boundary_source=
+                request.boundary_source,
+        )
+
+        print(
+            "[FARM] Saved to DynamoDB:",
+            farm_id,
+        )
 
     except Exception as error:
         print(
@@ -254,6 +317,11 @@ def save_farm_location(
                 + str(error)
             ),
         ) from error
+
+    # --------------------------------------------------------
+    # Response
+    # --------------------------------------------------------
+
     return FarmLocationSaveResponse(
         farm_id=farm_id,
 
@@ -278,10 +346,18 @@ def save_farm_location(
         boundary_source=(
             request.boundary_source
         ),
+
+        parcel_id=
+            request.parcel_id,
+
+        parcel_metadata=
+            request.parcel_metadata,
     )
-# =========================================================
+
+
+# ============================================================
 # CREATE AI FARM PROFILE
-# =========================================================
+# ============================================================
 
 @router.post(
     "/profile",
@@ -290,9 +366,11 @@ def save_farm_location(
 def create_ai_farm_profile(
     request: FarmProfileRequest,
 ):
+    # --------------------------------------------------------
+    # Validate farmer confirmation
+    # --------------------------------------------------------
 
     if not request.farmer_confirmed:
-
         raise HTTPException(
             status_code=400,
             detail=(
@@ -301,11 +379,11 @@ def create_ai_farm_profile(
             ),
         )
 
-    if (
-        request.mapped_area_acres
-        <= 0
-    ):
+    # --------------------------------------------------------
+    # Validate area
+    # --------------------------------------------------------
 
+    if request.mapped_area_acres <= 0:
         raise HTTPException(
             status_code=400,
             detail=(
@@ -314,8 +392,11 @@ def create_ai_farm_profile(
             ),
         )
 
-    try:
+    # --------------------------------------------------------
+    # Generate AI profile
+    # --------------------------------------------------------
 
+    try:
         result = create_profile(
             farm_id=
                 request.farm_id,
@@ -345,7 +426,6 @@ def create_ai_farm_profile(
         return result
 
     except Exception as error:
-
         print(
             "FARM PROFILE ERROR:",
             repr(error),
@@ -360,9 +440,10 @@ def create_ai_farm_profile(
             ),
         ) from error
 
-# =========================================================
+
+# ============================================================
 # GET SAVED FARMS
-# =========================================================
+# ============================================================
 
 @router.get("")
 def get_farms():
@@ -371,9 +452,9 @@ def get_farms():
     }
 
 
-# =========================================================
+# ============================================================
 # HEALTH CHECK
-# =========================================================
+# ============================================================
 
 @router.get("/health")
 def farm_map_health():

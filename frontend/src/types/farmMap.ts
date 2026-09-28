@@ -1,35 +1,56 @@
-import type { VoiceFarmState } from "./voice";
+export type ParcelGeometry = {
+  type: "Polygon" | "MultiPolygon";
+  coordinates: any;
+};
 
-export type MapCoordinate = [number, number];
+export type ParcelCandidate = {
+  layer: "cadastral" | "fmb";
+  geometry: ParcelGeometry;
+  properties: Record<string, unknown>;
+  centroid: {
+    latitude: number;
+    longitude: number;
+  } | null;
+  score: number;
+  evidence: string[];
+};
 
-export interface FarmPolygonGeometry {
-  type: "Polygon";
-  coordinates: MapCoordinate[][];
-}
+export type LocationSearchRequest = {
+  transcript?: string;
+  district?: string;
+  taluk?: string;
+  village?: string;
+  survey_no?: string;
+  road?: string;
+  landmarks?: string[];
+  latitude?: number;
+  longitude?: number;
+  limit?: number;
+};
 
-export interface FarmMapLocation {
-  latitude: number;
-  longitude: number;
-  label?: string;
-}
+export type LocationSearchResponse = {
+  parsed_clues: {
+    district: string | null;
+    taluk: string | null;
+    village: string | null;
+    survey_no: string | null;
+    road: string | null;
+    landmarks: Array<{
+      type: string;
+      query: string;
+    }>;
+    relations: string[];
+  };
 
-export interface FarmLocationSaveRequest {
-  farm_profile: VoiceFarmState;
-  location: FarmMapLocation;
-  boundary: FarmPolygonGeometry;
-  mapped_area_acres: number;
-  perimeter_m: number;
-  farmer_confirmed: true;
-  boundary_source: "farmer_drawn_satellite";
-}
+  candidate_count: number;
 
-export interface FarmLocationSaveResponse {
-  farm_id: string;
-  saved: boolean;
-  location: FarmMapLocation;
-  boundary: FarmPolygonGeometry;
-  mapped_area_acres: number;
-  perimeter_m: number;
-  farmer_confirmed: boolean;
-  boundary_source: string;
-}
+  candidates: ParcelCandidate[];
+
+  data_sources: string[];
+
+  missing_layers: string[];
+
+  status: string;
+
+  message: string;
+};

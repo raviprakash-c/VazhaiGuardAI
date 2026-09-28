@@ -1,48 +1,55 @@
-import { useState } from 'react';
+import { useState } from "react";
 
-export interface FarmProfile {
-  location: {
-    village: string;
-    taluk: string;
-    district: string;
-  };
-  land_characteristics: {
-    is_verified_agricultural: boolean;
-    accessibility: string;
-    water_access: string;
-  };
-  status: string;
-}
+import {
+  searchReferenceParcels,
+  type LocationSearchRequest,
+} from "../services/farmMapApi";
 
-export const useLandIntelligence = () => {
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const validateFarmBoundary = async (farmerId: string, coordinates: number[][]) => {
+export function useLandIntelligence() {
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState<string | null>(null);
+
+
+  const searchParcels = async (
+    request: LocationSearchRequest
+  ) => {
+
     setLoading(true);
     setError(null);
 
     try {
-      const response = await fetch('http://localhost:8000/api/farm/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          farmer_id: farmerId,
-          coordinates: [coordinates] // Wrap in array for GeoJSON polygon
-        }),
-      });
 
-      if (!response.ok) throw new Error('Validation failed');
+      return await searchReferenceParcels(
+        request
+      );
 
-      const data = await response.json();
-      return data; // Contains full farm profile
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err) {
+
+      const message =
+        err instanceof Error
+          ? err.message
+          : "Reference parcel search failed.";
+
+      setError(message);
+
       return null;
+
     } finally {
+
       setLoading(false);
+
     }
   };
 
-  return { validateFarmBoundary, loading, error };
-};
+
+  return {
+    searchParcels,
+    loading,
+    error,
+  };
+}

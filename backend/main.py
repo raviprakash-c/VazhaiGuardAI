@@ -1,24 +1,48 @@
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-
-from routes.zone import router as zone_router
-from voice_registration import router as voice_registration_router
-from agents.orchestrator import router as orchestrator_router
 from pathlib import Path
 
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
+# ------------------------------------------------------------
+# ROUTERS
+# ------------------------------------------------------------
+# farm_map.py, parcel.py and voice_registration.py are in the
+# backend project root. agents/orchestrator.py is under agents/.
+from farm_map import router as farm_map_router
+from parcel import router as parcel_router
+from voice_registration import router as voice_registration_router
+from agents.orchestrator import router as orchestrator_router
+
+
+# ------------------------------------------------------------
+# APPLICATION
+# ------------------------------------------------------------
 app = FastAPI(
     title="VazhaiGuardAI",
     version="2.0.0",
     description="AI-powered banana farm intelligence platform",
 )
-# ============================================================
-# TAMIL VOICE AUDIO
-# ============================================================
 
-TAMIL_AUDIO_DIR = Path(__file__).resolve().parent / "generated_audio"
+
+# ------------------------------------------------------------
+# CORS
+# ------------------------------------------------------------
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# ------------------------------------------------------------
+# TAMIL VOICE AUDIO
+# ------------------------------------------------------------
+TAMIL_AUDIO_DIR = (
+    Path(__file__).resolve().parent.parent / "generated_audio"
+)
 
 FIELD_AUDIO_FILES = {
     "farm_name": "farm_name.mp3",
@@ -35,8 +59,6 @@ FIELD_AUDIO_FILES = {
 
 @app.get("/voice/tamil-audio/{field}")
 async def get_tamil_audio(field: str):
-
-    # Check whether requested field exists
     if field not in FIELD_AUDIO_FILES:
         raise HTTPException(
             status_code=404,
@@ -44,14 +66,12 @@ async def get_tamil_audio(field: str):
         )
 
     filename = FIELD_AUDIO_FILES[field]
-
     audio_path = TAMIL_AUDIO_DIR / filename
 
     print("[TamilVoice] Requested field:", field)
     print("[TamilVoice] Audio path:", audio_path)
     print("[TamilVoice] File exists:", audio_path.exists())
 
-    # Check whether MP3 exists
     if not audio_path.exists():
         raise HTTPException(
             status_code=404,
@@ -63,20 +83,25 @@ async def get_tamil_audio(field: str):
         media_type="audio/mpeg",
         filename=filename,
     )
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-# Core routes
+
+# ------------------------------------------------------------
+# ROUTER REGISTRATION
+# ------------------------------------------------------------
+# IMPORTANT:
+# The variable names above match the aliases used here.
+# This fixes the previous:
+# NameError: name 'farm_map_router' is not defined
+# ------------------------------------------------------------
 app.include_router(voice_registration_router)
-app.include_router(zone_router)
+app.include_router(farm_map_router)
+app.include_router(parcel_router)
 app.include_router(orchestrator_router)
 
 
+# ------------------------------------------------------------
+# ROOT / HEALTH
+# ------------------------------------------------------------
 @app.get("/")
 def root():
     return {
