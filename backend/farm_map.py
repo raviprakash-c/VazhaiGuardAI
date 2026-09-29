@@ -8,11 +8,14 @@ from typing import Any, Dict, Literal
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
+
 from agents.farm_profile_agent import create_profile
+
 from schemas.farm_profile import (
     FarmProfileRequest,
     FarmProfileResponse,
 )
+
 from services.dynamodb_service import save_farm
 
 
@@ -29,6 +32,7 @@ router = APIRouter(
 # ============================================================
 # DATA MODELS
 # ============================================================
+
 
 class FarmMapLocation(BaseModel):
     latitude: float
@@ -103,6 +107,10 @@ DATA_DIR.mkdir(
 FARM_FILE = DATA_DIR / "farms.json"
 
 
+# ============================================================
+# READ FARMS
+# ============================================================
+
 def read_farms() -> list:
     if not FARM_FILE.exists():
         return []
@@ -112,6 +120,7 @@ def read_farms() -> list:
             "r",
             encoding="utf-8",
         ) as file:
+
             content = json.load(file)
 
         if isinstance(content, list):
@@ -126,13 +135,19 @@ def read_farms() -> list:
         return []
 
 
+# ============================================================
+# WRITE FARMS
+# ============================================================
+
 def write_farms(
     farms: list,
 ) -> None:
+
     with FARM_FILE.open(
         "w",
         encoding="utf-8",
     ) as file:
+
         json.dump(
             farms,
             file,
@@ -152,6 +167,7 @@ def write_farms(
 def save_farm_location(
     request: FarmLocationSaveRequest,
 ):
+
     # --------------------------------------------------------
     # Validate boundary
     # --------------------------------------------------------
@@ -160,6 +176,7 @@ def save_farm_location(
         "Polygon",
         "MultiPolygon",
     ):
+
         raise HTTPException(
             status_code=400,
             detail=(
@@ -169,6 +186,7 @@ def save_farm_location(
         )
 
     if not request.boundary.coordinates:
+
         raise HTTPException(
             status_code=400,
             detail=(
@@ -182,6 +200,7 @@ def save_farm_location(
     # --------------------------------------------------------
 
     if request.mapped_area_acres <= 0:
+
         raise HTTPException(
             status_code=400,
             detail=(
@@ -195,6 +214,7 @@ def save_farm_location(
     # --------------------------------------------------------
 
     if request.perimeter_m < 0:
+
         raise HTTPException(
             status_code=400,
             detail=(
@@ -257,9 +277,11 @@ def save_farm_location(
     )
 
     try:
+
         write_farms(farms)
 
     except OSError as error:
+
         raise HTTPException(
             status_code=500,
             detail=(
@@ -273,6 +295,7 @@ def save_farm_location(
     # --------------------------------------------------------
 
     try:
+
         save_farm(
             farm_id=farm_id,
 
@@ -304,6 +327,7 @@ def save_farm_location(
         )
 
     except Exception as error:
+
         print(
             "[FARM] DynamoDB save error:",
             repr(error),
@@ -366,11 +390,13 @@ def save_farm_location(
 def create_ai_farm_profile(
     request: FarmProfileRequest,
 ):
+
     # --------------------------------------------------------
     # Validate farmer confirmation
     # --------------------------------------------------------
 
     if not request.farmer_confirmed:
+
         raise HTTPException(
             status_code=400,
             detail=(
@@ -384,6 +410,7 @@ def create_ai_farm_profile(
     # --------------------------------------------------------
 
     if request.mapped_area_acres <= 0:
+
         raise HTTPException(
             status_code=400,
             detail=(
@@ -397,6 +424,7 @@ def create_ai_farm_profile(
     # --------------------------------------------------------
 
     try:
+
         result = create_profile(
             farm_id=
                 request.farm_id,
@@ -426,6 +454,7 @@ def create_ai_farm_profile(
         return result
 
     except Exception as error:
+
         print(
             "FARM PROFILE ERROR:",
             repr(error),
@@ -442,11 +471,63 @@ def create_ai_farm_profile(
 
 
 # ============================================================
-# GET SAVED FARMS
+# GET ALL SAVED FARMS
 # ============================================================
 
 @router.get("")
 def get_farms():
+
+    return {
+        "farms": read_farms()
+    }
+
+
+# ============================================================
+# GET ONE SAVED FARM
+# ============================================================
+
+@router.get("/{farm_id}")
+def get_farm_by_id(
+    farm_id: str,
+):
+
+    farms = read_farms()
+
+    for farm in farms:
+
+        if farm.get("farm_id") == farm_id:
+
+            return farm
+
+    raise HTTPException(
+        status_code=404,
+        detail=(
+            "Farm not found: "
+            + farm_id
+        ),
+    )
+
+
+# ============================================================
+# HEALTH CHECK
+# ============================================================
+
+@router.get("/health")
+def farm_map_health():
+
+    return {
+        "status": "ok",
+        "service": "farm-map",
+    }
+
+
+# ============================================================
+# GET ALL SAVED FARMS
+# ============================================================
+
+@router.get("")
+def get_farms():
+
     return {
         "farms": read_farms()
     }
@@ -458,7 +539,34 @@ def get_farms():
 
 @router.get("/health")
 def farm_map_health():
+
     return {
         "status": "ok",
         "service": "farm-map",
     }
+
+
+# ============================================================
+# GET ONE SAVED FARM
+# ============================================================
+
+@router.get("/{farm_id}")
+def get_farm_by_id(
+    farm_id: str,
+):
+
+    farms = read_farms()
+
+    for farm in farms:
+
+        if farm.get("farm_id") == farm_id:
+
+            return farm
+
+    raise HTTPException(
+        status_code=404,
+        detail=(
+            "Farm not found: "
+            + farm_id
+        ),
+    )

@@ -46,8 +46,13 @@ def search_farm_parcels(
     except Exception as error:
 
         print(
-            "PARCEL SEARCH ERROR:",
-            repr(error),
+            "========== PARCEL SEARCH ERROR =========="
+        )
+        print(
+            repr(error)
+        )
+        print(
+            "========================================="
         )
 
         raise HTTPException(
@@ -64,6 +69,59 @@ def confirm_farm_parcel(
     request: ParcelConfirmRequest,
 ):
 
+    print(
+        "\n========== PARCEL CONFIRM =========="
+    )
+
+    print(
+        "FARM ID:",
+        request.farm_id,
+    )
+
+    print(
+        "PARCEL ID:",
+        request.parcel_id,
+    )
+
+    print(
+        "FARMER CONFIRMED:",
+        request.farmer_confirmed,
+    )
+
+    print(
+        "DISTRICT:",
+        request.district,
+    )
+
+    print(
+        "TALUK:",
+        request.taluk,
+    )
+
+    print(
+        "VILLAGE:",
+        request.village,
+    )
+
+    print(
+        "SURVEY NUMBER:",
+        request.survey_number,
+    )
+
+    print(
+        "SUBDIVISION:",
+        request.subdivision,
+    )
+
+    print(
+        "GEOMETRY TYPE:",
+        request.geometry.get("type"),
+    )
+
+    print(
+        "=====================================\n"
+    )
+
     if not request.farmer_confirmed:
 
         return {
@@ -72,7 +130,9 @@ def confirm_farm_parcel(
             "parcel_id": request.parcel_id,
             "status": "MISMATCH",
             "farmer_confirmed": False,
-            "geometry": request.geometry,
+            "message": (
+                "Farmer did not confirm the cadastral parcel."
+            ),
         }
 
     return {
@@ -81,5 +141,7 @@ def confirm_farm_parcel(
         "parcel_id": request.parcel_id,
         "status": "FARMER_CONFIRMED",
         "farmer_confirmed": True,
-        "geometry": request.geometry,
+        "message": (
+            "Cadastral parcel confirmed successfully."
+        ),
     }

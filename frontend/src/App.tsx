@@ -20,6 +20,9 @@ import FarmLocationPage
 
 import FarmHomePage
   from "./pages/FarmHomePage";
+  
+import WeatherPage 
+  from "./pages/WeatherPage";
 
 
 export default function App() {
@@ -75,6 +78,12 @@ export default function App() {
           element={
             <FarmHomePage />
           }
+        />
+        <Route
+      path="weather"
+      element={
+      <WeatherPage />
+      }
         />
 
         <Route

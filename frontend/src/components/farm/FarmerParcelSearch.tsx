@@ -2,7 +2,6 @@ import {
   Search,
   MapPinned,
   FileSearch,
-  ChevronDown,
   Loader2,
 } from "lucide-react";
 

@@ -2,24 +2,17 @@ from __future__ import annotations
 
 import json
 import os
+import uuid
+from decimal import Decimal
 from typing import Any, Dict
 
 import boto3
+from botocore.exceptions import ClientError
 
 
 # ============================================================
 # AWS CONFIGURATION
 # ============================================================
-
-# IMPORTANT:
-# Your FAI team approved the VazhaiGuard SSO profile.
-#
-# PowerShell:
-#   $env:AWS_PROFILE="vazhaiguard"
-#   $env:AWS_REGION="ap-south-1"
-#
-# These defaults also make sure the application does not
-# accidentally use the expired "default" AWS profile.
 
 AWS_PROFILE = os.getenv(
     "AWS_PROFILE",
@@ -31,9 +24,16 @@ AWS_REGION = os.getenv(
     "ap-south-1",
 )
 
+# Approved Bedrock model
 TEXT_MODEL_ID = os.getenv(
     "VAZHAIGUARD_TEXT_MODEL",
     "mistral.ministral-3-8b-instruct",
+)
+
+# EXISTING Team 53 DynamoDB table
+DYNAMODB_FARMS_TABLE = os.getenv(
+    "VAZHAIGUARD_DYNAMODB_TABLE",
+    "fai-tce-team53-vazhaiguard-farms",
 )
 
 
@@ -41,25 +41,35 @@ TEXT_MODEL_ID = os.getenv(
 # AWS SESSION
 # ============================================================
 
-# Explicitly create the boto3 session using the VazhaiGuard
-# AWS IAM Identity Center / SSO profile.
-#
-# This is important because boto3 otherwise previously selected:
-#
-#     PROFILE: default
-#     METHOD: shared-credentials-file
-#
-# which contained expired credentials.
-#
-# We now explicitly select:
-#
-#     PROFILE: vazhaiguard
-#     METHOD: sso
-#     REGION: ap-south-1
+def create_aws_session():
+    """
+    Create the AWS session using the VazhaiGuard
+    IAM Identity Center profile.
 
-session = boto3.Session(
-    profile_name=AWS_PROFILE,
+    IMPORTANT:
+    Do not use the default profile here.
+    """
+
+    return boto3.Session(
+        profile_name=AWS_PROFILE,
+        region_name=AWS_REGION,
+    )
+
+
+session = create_aws_session()
+
+
+# ============================================================
+# AWS RESOURCES
+# ============================================================
+
+dynamodb = session.resource(
+    "dynamodb",
     region_name=AWS_REGION,
+)
+
+farms_table = dynamodb.Table(
+    DYNAMODB_FARMS_TABLE,
 )
 
 
@@ -69,14 +79,142 @@ session = boto3.Session(
 
 def get_bedrock_client():
     """
-    Create the Amazon Bedrock Runtime client using the
-    VazhaiGuard AWS SSO session.
+    Return Bedrock Runtime client using
+    the VazhaiGuard SSO session.
     """
 
     return session.client(
         "bedrock-runtime",
         region_name=AWS_REGION,
     )
+
+
+# ============================================================
+# AWS IDENTITY
+# ============================================================
+
+def get_aws_identity():
+    """
+    Return the AWS identity currently used
+    by this backend.
+    """
+
+    sts = session.client(
+        "sts",
+        region_name=AWS_REGION,
+    )
+
+    return sts.get_caller_identity()
+
+
+# ============================================================
+# DYNAMODB HEALTH CHECK
+# ============================================================
+
+def check_dynamodb_table():
+    """
+    Confirm that the configured DynamoDB table exists
+    and is ACTIVE.
+    """
+
+    try:
+
+        response = farms_table.meta.client.describe_table(
+            TableName=DYNAMODB_FARMS_TABLE,
+        )
+
+        table_info = response.get(
+            "Table",
+            {},
+        )
+
+        return {
+            "table_name": table_info.get(
+                "TableName"
+            ),
+            "status": table_info.get(
+                "TableStatus"
+            ),
+            "key_schema": table_info.get(
+                "KeySchema"
+            ),
+        }
+
+    except ClientError as error:
+
+        print(
+            "\n========== DYNAMODB ERROR =========="
+        )
+
+        print(
+            repr(error)
+        )
+
+        print(
+            "TABLE:",
+            DYNAMODB_FARMS_TABLE,
+        )
+
+        print(
+            "REGION:",
+            AWS_REGION,
+        )
+
+        print(
+            "PROFILE:",
+            AWS_PROFILE,
+        )
+
+        print(
+            "========== END DYNAMODB ERROR =========="
+        )
+
+        raise
+
+
+# ============================================================
+# JSON SERIALIZATION
+# ============================================================
+
+def dynamodb_safe(value: Any) -> Any:
+    """
+    Convert values into DynamoDB-compatible values.
+
+    This is useful for:
+    - float
+    - dict
+    - list
+    - nested farm data
+    """
+
+    if isinstance(value, float):
+
+        return Decimal(
+            str(value)
+        )
+
+    if isinstance(value, dict):
+
+        return {
+            str(key): dynamodb_safe(item)
+            for key, item in value.items()
+        }
+
+    if isinstance(value, list):
+
+        return [
+            dynamodb_safe(item)
+            for item in value
+        ]
+
+    if isinstance(value, tuple):
+
+        return [
+            dynamodb_safe(item)
+            for item in value
+        ]
+
+    return value
 
 
 # ============================================================
@@ -89,10 +227,10 @@ def extract_json(
     """
     Extract a JSON object from a Bedrock response.
 
-    Handles:
-    1. Pure JSON
-    2. JSON inside Markdown code fences
-    3. JSON surrounded by additional text
+    Supports:
+    - pure JSON
+    - Markdown code fences
+    - additional text around JSON
     """
 
     cleaned = (
@@ -104,14 +242,19 @@ def extract_json(
     )
 
     # --------------------------------------------------------
-    # 1. Try parsing the complete response
+    # 1. Complete response
     # --------------------------------------------------------
 
     try:
 
-        result = json.loads(cleaned)
+        result = json.loads(
+            cleaned
+        )
 
-        if not isinstance(result, dict):
+        if not isinstance(
+            result,
+            dict,
+        ):
 
             raise ValueError(
                 "Bedrock JSON response "
@@ -124,11 +267,16 @@ def extract_json(
         pass
 
     # --------------------------------------------------------
-    # 2. Find JSON object inside additional text
+    # 2. Locate JSON object
     # --------------------------------------------------------
 
-    start = cleaned.find("{")
-    end = cleaned.rfind("}")
+    start = cleaned.find(
+        "{"
+    )
+
+    end = cleaned.rfind(
+        "}"
+    )
 
     if (
         start == -1
@@ -146,7 +294,7 @@ def extract_json(
     ]
 
     # --------------------------------------------------------
-    # 3. Parse extracted JSON
+    # 3. Parse
     # --------------------------------------------------------
 
     try:
@@ -161,7 +309,9 @@ def extract_json(
             "\n========== BEDROCK RAW RESPONSE =========="
         )
 
-        print(cleaned)
+        print(
+            cleaned
+        )
 
         print(
             "========== END BEDROCK RESPONSE =========="
@@ -174,7 +324,10 @@ def extract_json(
 
         raise
 
-    if not isinstance(result, dict):
+    if not isinstance(
+        result,
+        dict,
+    ):
 
         raise ValueError(
             "Bedrock JSON response "
@@ -185,7 +338,7 @@ def extract_json(
 
 
 # ============================================================
-# CREATE FARM PROFILE
+# CREATE FARM PROFILE WITH BEDROCK
 # ============================================================
 
 def create_farm_profile(
@@ -195,18 +348,18 @@ def create_farm_profile(
     mapped_area_acres: float,
 ) -> Dict[str, Any]:
     """
-    Create an AI farm profile using Amazon Bedrock.
+    Generate the AI farm profile using Bedrock.
 
-    The model must only use information supplied
-    by the farmer/application and must not invent
-    missing agricultural information.
+    IMPORTANT:
+    Bedrock only interprets supplied information.
+    It does not create geographic measurements.
     """
 
     if not TEXT_MODEL_ID:
 
         raise RuntimeError(
             "VAZHAIGUARD_TEXT_MODEL "
-            "environment variable is not configured."
+            "is not configured."
         )
 
     prompt = f"""
@@ -297,8 +450,6 @@ Rules:
 10. Do not add information that was not provided.
 11. Return valid JSON.
 12. Do not use Markdown code fences.
-13. The profile will later be used by
-    planting, growth and StormGuard modules.
 """
 
     client = get_bedrock_client()
@@ -337,12 +488,12 @@ Rules:
         )
 
         print(
-            "AWS PROFILE:",
+            "PROFILE:",
             AWS_PROFILE,
         )
 
         print(
-            "AWS REGION:",
+            "REGION:",
             AWS_REGION,
         )
 
@@ -386,7 +537,226 @@ Rules:
 
 
 # ============================================================
-# GENERAL TEXT GENERATION
+# SAVE FARM LOCATION
+# ============================================================
+
+def save_farm_location(
+    farm_profile: Dict[str, Any],
+    location: Dict[str, Any],
+    boundary: Dict[str, Any],
+    mapped_area_acres: float,
+    perimeter_m: float,
+    farmer_confirmed: bool,
+    boundary_source: str,
+    parcel_id: str | None = None,
+    parcel_metadata: Dict[str, Any] | None = None,
+    farm_id: str | None = None,
+) -> Dict[str, Any]:
+    """
+    Save the farmer's confirmed farm location and boundary
+    into the existing Team 53 DynamoDB table.
+
+    DynamoDB partition key:
+        farm_id
+    """
+
+    # --------------------------------------------------------
+    # Validate mapped area
+    # --------------------------------------------------------
+
+    if mapped_area_acres <= 0:
+
+        raise ValueError(
+            "Mapped farm area must be greater than zero."
+        )
+
+    # --------------------------------------------------------
+    # Validate boundary confirmation
+    # --------------------------------------------------------
+
+    if farmer_confirmed is not True:
+
+        raise ValueError(
+            "Farm boundary must be confirmed by the farmer."
+        )
+
+    # --------------------------------------------------------
+    # Generate farm ID
+    # --------------------------------------------------------
+
+    if not farm_id:
+
+        farm_id = (
+            "farm-"
+            + uuid.uuid4().hex
+        )
+
+    # --------------------------------------------------------
+    # Build DynamoDB item
+    # --------------------------------------------------------
+
+    item = {
+
+        "farm_id": farm_id,
+
+        "farm_profile": dynamodb_safe(
+            farm_profile
+        ),
+
+        "location": dynamodb_safe(
+            location
+        ),
+
+        "boundary": dynamodb_safe(
+            boundary
+        ),
+
+        "mapped_area_acres": Decimal(
+            str(mapped_area_acres)
+        ),
+
+        "perimeter_m": Decimal(
+            str(perimeter_m)
+        ),
+
+        "farmer_confirmed": True,
+
+        "boundary_source": boundary_source,
+
+        "created_by_profile": AWS_PROFILE,
+
+        "aws_region": AWS_REGION,
+
+    }
+
+    if parcel_id:
+
+        item["parcel_id"] = parcel_id
+
+    if parcel_metadata:
+
+        item["parcel_metadata"] = dynamodb_safe(
+            parcel_metadata
+        )
+
+    # --------------------------------------------------------
+    # Save to DynamoDB
+    # --------------------------------------------------------
+
+    try:
+
+        farms_table.put_item(
+            Item=item
+        )
+
+    except ClientError as error:
+
+        print(
+            "\n========== DYNAMODB PUT ERROR =========="
+        )
+
+        print(
+            repr(error)
+        )
+
+        print(
+            "TABLE:",
+            DYNAMODB_FARMS_TABLE,
+        )
+
+        print(
+            "PROFILE:",
+            AWS_PROFILE,
+        )
+
+        print(
+            "REGION:",
+            AWS_REGION,
+        )
+
+        print(
+            "FARM ID:",
+            farm_id,
+        )
+
+        print(
+            "========== END DYNAMODB PUT ERROR =========="
+        )
+
+        raise
+
+    # --------------------------------------------------------
+    # Return API-friendly response
+    # --------------------------------------------------------
+
+    return {
+
+        "farm_id": farm_id,
+
+        "saved": True,
+
+        "location": location,
+
+        "boundary": boundary,
+
+        "mapped_area_acres": mapped_area_acres,
+
+        "perimeter_m": perimeter_m,
+
+        "farmer_confirmed": True,
+
+        "boundary_source": boundary_source,
+
+        "parcel_id": parcel_id,
+
+        "parcel_metadata": parcel_metadata,
+    }
+
+
+# ============================================================
+# GET FARM
+# ============================================================
+
+def get_farm(
+    farm_id: str,
+) -> Dict[str, Any] | None:
+    """
+    Retrieve one farm using the DynamoDB partition key.
+    """
+
+    try:
+
+        response = farms_table.get_item(
+            Key={
+                "farm_id": farm_id
+            }
+        )
+
+    except ClientError as error:
+
+        print(
+            "\n========== DYNAMODB GET ERROR =========="
+        )
+
+        print(
+            repr(error)
+        )
+
+        raise
+
+    item = response.get(
+        "Item"
+    )
+
+    if not item:
+
+        return None
+
+    return item
+
+
+# ============================================================
+# GENERAL BEDROCK TEXT GENERATION
 # ============================================================
 
 def generate_text(
@@ -400,7 +770,8 @@ def generate_text(
     """
 
     selected_model = (
-        model_id or TEXT_MODEL_ID
+        model_id
+        or TEXT_MODEL_ID
     )
 
     if not selected_model:
@@ -444,12 +815,12 @@ def generate_text(
         )
 
         print(
-            "AWS PROFILE:",
+            "PROFILE:",
             AWS_PROFILE,
         )
 
         print(
-            "AWS REGION:",
+            "REGION:",
             AWS_REGION,
         )
 

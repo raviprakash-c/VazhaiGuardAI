@@ -5,6 +5,10 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 
+# ============================================================
+# PARCEL SEARCH REQUEST
+# ============================================================
+
 class ParcelSearchRequest(BaseModel):
     district: Optional[str] = None
     taluk: Optional[str] = None
@@ -26,6 +30,10 @@ class ParcelSearchRequest(BaseModel):
         le=50,
     )
 
+
+# ============================================================
+# PARCEL CANDIDATE
+# ============================================================
 
 class ParcelCandidate(BaseModel):
     parcel_id: str
@@ -55,12 +63,21 @@ class ParcelCandidate(BaseModel):
     geometry: Dict[str, Any]
 
 
+# ============================================================
+# PARCEL SEARCH RESPONSE
+# ============================================================
+
 class ParcelSearchResponse(BaseModel):
     success: bool
+
     candidates: List[ParcelCandidate]
 
     search_summary: Dict[str, Any]
 
+
+# ============================================================
+# PARCEL CONFIRM REQUEST
+# ============================================================
 
 class ParcelConfirmRequest(BaseModel):
     farm_id: str
@@ -78,6 +95,10 @@ class ParcelConfirmRequest(BaseModel):
 
     geometry: Dict[str, Any]
 
+
+# ============================================================
+# PARCEL CONFIRM RESPONSE
+# ============================================================
 
 class ParcelConfirmResponse(BaseModel):
     success: bool

@@ -13,6 +13,8 @@ from farm_map import router as farm_map_router
 from parcel import router as parcel_router
 from voice_registration import router as voice_registration_router
 from agents.orchestrator import router as orchestrator_router
+from weather import router as weather_router
+
 
 
 # ------------------------------------------------------------
@@ -97,6 +99,11 @@ app.include_router(voice_registration_router)
 app.include_router(farm_map_router)
 app.include_router(parcel_router)
 app.include_router(orchestrator_router)
+app.include_router(weather_router)
+app.include_router(
+    weather_router
+)
+
 
 
 # ------------------------------------------------------------

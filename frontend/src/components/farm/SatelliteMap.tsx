@@ -10,29 +10,32 @@ import "@mapbox/mapbox-gl-draw/dist/mapbox-gl-draw.css";
    TYPES
 ========================================================= */
 
-export type FarmGeometry =
-  | {
-      type: "Polygon";
-      coordinates: [number, number][][];
-    }
-  | {
-      type: "MultiPolygon";
-      coordinates: [number, number][][][];
-    };
-
-type FarmMapLocation = {
+export type FarmMapLocation = {
   latitude: number;
   longitude: number;
   label?: string;
   accuracy?: number;
 };
 
+/*
+ * Keep the interactive farmer-drawn boundary as Polygon.
+ *
+ * Cadastral APIs may contain MultiPolygon, but the current
+ * FarmBoundaryEditor and FarmLocationPage are Polygon-based.
+ *
+ * This keeps the complete frontend flow type-safe.
+ */
+export type FarmPolygonGeometry = {
+  type: "Polygon";
+  coordinates: [number, number][][];
+};
+
 export type PlotSelectData = {
-  geometry: FarmGeometry;
+  geometry: FarmPolygonGeometry;
   properties?: Record<string, unknown>;
 };
 
-type BoundaryMetrics = {
+export type BoundaryMetrics = {
   areaAcres: number;
   perimeterM: number;
 };
@@ -42,7 +45,7 @@ type Props = {
 
   location: FarmMapLocation;
 
-  boundary: FarmGeometry | null;
+  boundary: FarmPolygonGeometry | null;
 
   startDrawSignal: number;
 
@@ -50,8 +53,7 @@ type Props = {
 
   dropPinMode: boolean;
 
-  cadastralGeoJson?: GeoJSON.FeatureCollection;
-
+  cadastralGeoJson?: any;
   selectedParcelId?: string | null;
 
   onLocationChange: (
@@ -59,7 +61,7 @@ type Props = {
   ) => void;
 
   onBoundaryChange: (
-    boundary: FarmGeometry | null
+    boundary: FarmPolygonGeometry | null
   ) => void;
 
   onBoundaryMetricsChange?: (
@@ -75,12 +77,37 @@ type Props = {
    CONSTANTS
 ========================================================= */
 
-const DEFAULT_ZOOM = 17;
+const DEFAULT_ZOOM = 18.5;
 
-const FARM_FOCUS_ZOOM = 19;
+const FARM_FOCUS_ZOOM = 19.5;
 
 /* =========================================================
-   GEO HELPERS
+   GPS ZOOM
+========================================================= */
+
+function getGpsZoom(
+  accuracy?: number
+): number {
+  if (
+    accuracy === undefined ||
+    !Number.isFinite(accuracy)
+  ) {
+    return DEFAULT_ZOOM;
+  }
+
+  if (accuracy <= 15) {
+    return 19;
+  }
+
+  if (accuracy <= 40) {
+    return 18;
+  }
+
+  return 16.5;
+}
+
+/* =========================================================
+   DISTANCE
 ========================================================= */
 
 function distanceInMeters(
@@ -88,29 +115,37 @@ function distanceInMeters(
   second: [number, number]
 ): number {
   const [lon1, lat1] = first;
+
   const [lon2, lat2] = second;
 
   const earthRadius = 6371008.8;
 
-  const toRadians = (degrees: number) =>
+  const toRadians = (
+    degrees: number
+  ) =>
     (degrees * Math.PI) / 180;
 
-  const latitudeDifference = toRadians(
-    lat2 - lat1
-  );
+  const latitudeDifference =
+    toRadians(lat2 - lat1);
 
-  const longitudeDifference = toRadians(
-    lon2 - lon1
-  );
+  const longitudeDifference =
+    toRadians(lon2 - lon1);
 
-  const latitude1 = toRadians(lat1);
-  const latitude2 = toRadians(lat2);
+  const latitude1 =
+    toRadians(lat1);
+
+  const latitude2 =
+    toRadians(lat2);
 
   const a =
-    Math.sin(latitudeDifference / 2) ** 2 +
+    Math.sin(
+      latitudeDifference / 2
+    ) ** 2 +
     Math.cos(latitude1) *
       Math.cos(latitude2) *
-      Math.sin(longitudeDifference / 2) ** 2;
+      Math.sin(
+        longitudeDifference / 2
+      ) ** 2;
 
   const c =
     2 *
@@ -122,10 +157,19 @@ function distanceInMeters(
   return earthRadius * c;
 }
 
-function perimeterForRing(
-  ring: [number, number][]
+/* =========================================================
+   PERIMETER
+========================================================= */
+
+function calculatePerimeter(
+  coordinates: [number, number][][]
 ): number {
-  if (!ring || ring.length < 2) {
+  const ring = coordinates[0];
+
+  if (
+    !ring ||
+    ring.length < 2
+  ) {
     return 0;
   }
 
@@ -145,162 +189,151 @@ function perimeterForRing(
   return perimeter;
 }
 
-function calculatePerimeter(
-  geometry: FarmGeometry
-): number {
-  if (geometry.type === "Polygon") {
-    return geometry.coordinates.reduce(
-      (total, ring) =>
-        total + perimeterForRing(ring),
-      0
-    );
-  }
-
-  return geometry.coordinates.reduce(
-    (polygonTotal, polygon) =>
-      polygonTotal +
-      polygon.reduce(
-        (ringTotal, ring) =>
-          ringTotal + perimeterForRing(ring),
-        0
-      ),
-    0
-  );
-}
+/* =========================================================
+   FARM METRICS
+========================================================= */
 
 function calculateBoundaryMetrics(
-  geometry: FarmGeometry
+  boundary: FarmPolygonGeometry
 ): BoundaryMetrics {
   const polygon = {
     type: "Feature" as const,
+
     properties: {},
-    geometry,
+
+    geometry: boundary,
   };
 
-  const areaSquareMeters = area(polygon);
+  const areaSquareMeters =
+    area(polygon);
 
   const areaAcres =
-    areaSquareMeters / 4046.8564224;
+    areaSquareMeters /
+    4046.8564224;
 
   const perimeterM =
-    calculatePerimeter(geometry);
+    calculatePerimeter(
+      boundary.coordinates
+    );
 
   return {
-    areaAcres: Number(
-      areaAcres.toFixed(4)
-    ),
-    perimeterM: Number(
-      perimeterM.toFixed(2)
-    ),
+    areaAcres:
+      Number(
+        areaAcres.toFixed(4)
+      ),
+
+    perimeterM:
+      Number(
+        perimeterM.toFixed(2)
+      ),
   };
 }
 
 /* =========================================================
-   BOUNDS
+   FIT FARM BOUNDARY
 ========================================================= */
 
-function extendBoundsFromCoordinates(
-  bounds: mapboxgl.LngLatBounds,
-  coordinates: any
+function fitFarmBoundary(
+  map: mapboxgl.Map,
+  boundary: FarmPolygonGeometry
 ) {
-  if (!Array.isArray(coordinates)) {
-    return;
-  }
+  const ring =
+    boundary.coordinates[0];
 
   if (
-    coordinates.length >= 2 &&
-    typeof coordinates[0] === "number" &&
-    typeof coordinates[1] === "number"
+    !ring ||
+    ring.length === 0
   ) {
-    bounds.extend([
-      coordinates[0],
-      coordinates[1],
-    ]);
-
     return;
   }
 
-  coordinates.forEach((child) => {
-    extendBoundsFromCoordinates(
-      bounds,
-      child
-    );
-  });
-}
-
-function fitGeometry(
-  map: mapboxgl.Map,
-  geometry: FarmGeometry
-) {
   const bounds =
     new mapboxgl.LngLatBounds();
 
-  extendBoundsFromCoordinates(
-    bounds,
-    geometry.coordinates
+  ring.forEach(
+    ([longitude, latitude]) => {
+      bounds.extend([
+        longitude,
+        latitude,
+      ]);
+    }
   );
 
-  if (bounds.isEmpty()) {
-    return;
-  }
-
-  map.fitBounds(bounds, {
-    padding: 80,
-    maxZoom: 20,
-    duration: 1000,
-    essential: true,
-  });
+  map.fitBounds(
+    bounds,
+    {
+      padding: 90,
+      maxZoom: 20,
+      duration: 1000,
+      essential: true,
+    }
+  );
 }
 
 /* =========================================================
-   COMPONENT
+   SATELLITE MAP
 ========================================================= */
 
 export default function SatelliteMap({
   accessToken,
+
   location,
+
   boundary,
+
   startDrawSignal,
+
   clearDrawSignal,
+
   dropPinMode,
+
   cadastralGeoJson,
-  selectedParcelId,
+
   onLocationChange,
+
   onBoundaryChange,
+
   onBoundaryMetricsChange,
+
   onPlotSelect,
 }: Props) {
   const containerRef =
-    useRef<HTMLDivElement | null>(null);
+    useRef<HTMLDivElement | null>(
+      null
+    );
 
   const mapRef =
-    useRef<mapboxgl.Map | null>(null);
+    useRef<mapboxgl.Map | null>(
+      null
+    );
 
   const drawRef =
-    useRef<MapboxDraw | null>(null);
+    useRef<MapboxDraw | null>(
+      null
+    );
 
   const markerRef =
-    useRef<mapboxgl.Marker | null>(null);
+    useRef<mapboxgl.Marker | null>(
+      null
+    );
 
   const boundarySyncRef =
     useRef(false);
 
-  const cadastralGeoJsonRef =
-    useRef(cadastralGeoJson);
+  const initialLocationRef =
+    useRef(location);
 
-  const selectedParcelIdRef =
-    useRef(selectedParcelId);
-
-  const callbacksRef = useRef({
-    onLocationChange,
-    onBoundaryChange,
-    onBoundaryMetricsChange,
-    onPlotSelect,
-  });
-
-  /* -------------------------------------------------------
+  /* =======================================================
      KEEP CALLBACKS CURRENT
-  ------------------------------------------------------- */
+  ======================================================= */
+
+  const callbacksRef =
+    useRef({
+      onLocationChange,
+      onBoundaryChange,
+      onBoundaryMetricsChange,
+      onPlotSelect,
+    });
 
   useEffect(() => {
     callbacksRef.current = {
@@ -316,22 +349,8 @@ export default function SatelliteMap({
     onPlotSelect,
   ]);
 
-  /* -------------------------------------------------------
-     KEEP DATA REFS CURRENT
-  ------------------------------------------------------- */
-
-  useEffect(() => {
-    cadastralGeoJsonRef.current =
-      cadastralGeoJson;
-  }, [cadastralGeoJson]);
-
-  useEffect(() => {
-    selectedParcelIdRef.current =
-      selectedParcelId;
-  }, [selectedParcelId]);
-
   /* =======================================================
-     CREATE MAP
+     INITIALIZE MAP
   ======================================================= */
 
   useEffect(() => {
@@ -343,18 +362,23 @@ export default function SatelliteMap({
       return;
     }
 
-    mapboxgl.accessToken = accessToken;
+    mapboxgl.accessToken =
+      accessToken;
+
+    const firstLocation =
+      initialLocationRef.current;
 
     const map =
       new mapboxgl.Map({
-        container: containerRef.current,
+        container:
+          containerRef.current,
 
         style:
           "mapbox://styles/mapbox/satellite-streets-v12",
 
         center: [
-          location.longitude,
-          location.latitude,
+          firstLocation.longitude,
+          firstLocation.latitude,
         ],
 
         zoom: DEFAULT_ZOOM,
@@ -368,13 +392,14 @@ export default function SatelliteMap({
         maxZoom: 21,
       });
 
-    /* -----------------------------------------------------
-       DRAW CONTROL
-    ----------------------------------------------------- */
+    /* =====================================================
+       MAPBOX DRAW
+    ===================================================== */
 
     const draw =
       new MapboxDraw({
-        displayControlsDefault: false,
+        displayControlsDefault:
+          false,
 
         controls: {
           polygon: true,
@@ -383,100 +408,146 @@ export default function SatelliteMap({
 
         styles: [
           {
-            id: "vg-draw-fill",
+            id:
+              "gl-draw-polygon-fill",
 
             type: "fill",
 
             filter: [
               "all",
-              ["==", "$type", "Polygon"],
+              [
+                "==",
+                "$type",
+                "Polygon",
+              ],
             ],
 
             paint: {
-              "fill-color": "#b8df4b",
+              "fill-color":
+                "#9ACD32",
 
-              "fill-opacity": 0.25,
+              "fill-opacity":
+                0.22,
             },
           },
 
           {
-            id: "vg-draw-line",
+            id:
+              "gl-draw-polygon-stroke",
 
             type: "line",
 
             filter: [
               "all",
-              ["==", "$type", "Polygon"],
+              [
+                "==",
+                "$type",
+                "Polygon",
+              ],
             ],
 
             paint: {
-              "line-color": "#b8df4b",
+              "line-color":
+                "#D9F99D",
 
               "line-width": 4,
 
-              "line-opacity": 0.95,
+              "line-opacity":
+                0.95,
             },
           },
 
           {
             id:
-              "vg-draw-polygon-and-line-vertex-halo-active",
+              "gl-draw-polygon-and-line-vertex-halo-active",
 
             type: "circle",
 
             filter: [
               "all",
-              ["==", "meta", "vertex"],
-              ["==", "$type", "Point"],
-              ["==", "meta", "feature"],
+
+              [
+                "==",
+                "meta",
+                "vertex",
+              ],
+
+              [
+                "==",
+                "$type",
+                "Point",
+              ],
+
+              [
+                "==",
+                "meta",
+                "feature",
+              ],
             ],
 
             paint: {
               "circle-radius": 8,
 
-              "circle-color": "#ffffff",
+              "circle-color":
+                "#FFFFFF",
             },
           },
 
           {
             id:
-              "vg-draw-polygon-and-line-vertex-active",
+              "gl-draw-polygon-and-line-vertex-active",
 
             type: "circle",
 
             filter: [
               "all",
-              ["==", "meta", "vertex"],
-              ["==", "$type", "Point"],
-              ["==", "meta", "feature"],
+
+              [
+                "==",
+                "meta",
+                "vertex",
+              ],
+
+              [
+                "==",
+                "$type",
+                "Point",
+              ],
+
+              [
+                "==",
+                "meta",
+                "feature",
+              ],
             ],
 
             paint: {
               "circle-radius": 5,
 
-              "circle-color": "#146c43",
+              "circle-color":
+                "#7FBF3F",
             },
           },
         ],
       });
 
-    /* -----------------------------------------------------
-       MARKER
-    ----------------------------------------------------- */
+    /* =====================================================
+       FARMER LOCATION MARKER
+    ===================================================== */
 
     const marker =
       new mapboxgl.Marker({
         color: "#b8df4b",
       })
         .setLngLat([
-          location.longitude,
-          location.latitude,
+          firstLocation.longitude,
+          firstLocation.latitude,
         ])
         .addTo(map);
 
-    /* -----------------------------------------------------
+    /* =====================================================
        MAP CONTROLS
-    ----------------------------------------------------- */
+    ===================================================== */
 
     map.addControl(
       new mapboxgl.NavigationControl(),
@@ -494,300 +565,279 @@ export default function SatelliteMap({
     );
 
     /* =====================================================
-       MAP LOAD
+       CADASTRAL DATA
     ===================================================== */
 
-    map.on("load", () => {
-      const geojson =
-        cadastralGeoJsonRef.current;
+    if (cadastralGeoJson) {
+      map.on("load", () => {
+        if (
+          map.getSource(
+            "cadastral"
+          )
+        ) {
+          return;
+        }
 
-      if (!geojson) {
-        return;
-      }
+        map.addSource(
+          "cadastral",
+          {
+            type: "geojson",
 
-      if (
-        !map.getSource("vg-cadastral")
-      ) {
-        map.addSource("vg-cadastral", {
-          type: "geojson",
+            data:
+              cadastralGeoJson,
+          }
+        );
 
-          data: geojson,
-        });
-      }
-
-      if (
-        !map.getLayer("vg-cadastral-fill")
-      ) {
         map.addLayer({
-          id: "vg-cadastral-fill",
+          id:
+            "cadastral-fill",
 
           type: "fill",
 
-          source: "vg-cadastral",
+          source:
+            "cadastral",
 
           paint: {
-            "fill-color": [
-              "case",
+            "fill-color":
+              "#007cbf",
 
-              [
-                "==",
-
-                [
-                  "get",
-                  "parcel_id",
-                ],
-
-                selectedParcelIdRef.current ||
-                  "",
-              ],
-
-              "#b8df4b",
-
-              "#7fc97f",
-            ],
-
-            "fill-opacity": [
-              "case",
-
-              [
-                "==",
-
-                [
-                  "get",
-                  "parcel_id",
-                ],
-
-                selectedParcelIdRef.current ||
-                  "",
-              ],
-
-              0.48,
-
-              0.16,
-            ],
+            "fill-opacity":
+              0.3,
           },
         });
-      }
 
-      if (
-        !map.getLayer("vg-cadastral-line")
-      ) {
         map.addLayer({
-          id: "vg-cadastral-line",
+          id:
+            "cadastral-line",
 
           type: "line",
 
-          source: "vg-cadastral",
+          source:
+            "cadastral",
 
           paint: {
-            "line-color": [
-              "case",
-
-              [
-                "==",
-
-                [
-                  "get",
-                  "parcel_id",
-                ],
-
-                selectedParcelIdRef.current ||
-                  "",
-              ],
-
-              "#b8df4b",
-
+            "line-color":
               "#ffffff",
-            ],
 
-            "line-width": [
-              "case",
-
-              [
-                "==",
-
-                [
-                  "get",
-                  "parcel_id",
-                ],
-
-                selectedParcelIdRef.current ||
-                  "",
-              ],
-
-              4,
-
-              1.5,
-            ],
-
-            "line-opacity": 0.9,
+            "line-width": 2,
           },
         });
-      }
-    });
+      });
+    }
 
     /* =====================================================
        MAP CLICK
     ===================================================== */
 
-    map.on("click", (event) => {
-      /* ---------------------------------------------------
-         GPS PIN MODE
-      --------------------------------------------------- */
+    map.on(
+      "click",
+      (event) => {
+        /* -----------------------------------------------
+           DROP FARM PIN
+        ------------------------------------------------ */
 
-      if (dropPinMode) {
-        const lat = event.lngLat.lat;
+        if (dropPinMode) {
+          const lat =
+            event.lngLat.lat;
 
-        const lng = event.lngLat.lng;
+          const lng =
+            event.lngLat.lng;
 
-        callbacksRef.current.onLocationChange({
-          latitude: lat,
+          callbacksRef.current
+            .onLocationChange({
+              latitude: lat,
 
-          longitude: lng,
+              longitude: lng,
 
-          label:
-            "Farmer selected farm centre",
-        });
+              label:
+                "Farmer selected farm centre",
+            });
 
-        map.flyTo({
-          center: [lng, lat],
+          map.flyTo({
+            center: [lng, lat],
 
-          zoom: FARM_FOCUS_ZOOM,
+            zoom:
+              FARM_FOCUS_ZOOM,
 
-          duration: 1000,
+            duration: 1400,
 
-          essential: true,
-        });
+            essential: true,
+          });
 
-        return;
-      }
+          return;
+        }
 
-      /* ---------------------------------------------------
-         CADASTRAL PARCEL MODE
-      --------------------------------------------------- */
+        /* -----------------------------------------------
+           CADASTRAL PARCEL CLICK
+        ------------------------------------------------ */
 
-      if (
-        !map.getLayer(
-          "vg-cadastral-fill"
-        )
-      ) {
-        return;
-      }
+        if (
+          cadastralGeoJson &&
+          !dropPinMode
+        ) {
+          const features =
+            map.queryRenderedFeatures(
+              event.point,
+              {
+                layers: [
+                  "cadastral-fill",
+                ],
+              }
+            );
 
-      const features =
-        map.queryRenderedFeatures(
-          event.point,
-          {
-            layers: [
-              "vg-cadastral-fill",
-            ],
+          if (
+            features.length === 0
+          ) {
+            return;
           }
-        );
 
-      const feature = features[0];
+          const feature =
+            features[0];
 
-      if (!feature) {
-        return;
+          const geometry =
+            feature.geometry;
+
+          /*
+           * The current FarmLocationPage and
+           * FarmBoundaryEditor consume Polygon.
+           *
+           * Therefore only emit a Polygon
+           * through onPlotSelect.
+           *
+           * MultiPolygon cadastral data remains
+           * valid in the parcel API and can be
+           * handled separately by parcel confirmation.
+           */
+
+          if (
+            geometry.type ===
+              "Polygon"
+          ) {
+            const selectedGeometry:
+              FarmPolygonGeometry = {
+              type: "Polygon",
+
+              coordinates:
+                geometry.coordinates as [
+                  number,
+                  number
+                ][][],
+            };
+
+            callbacksRef.current
+              .onPlotSelect?.({
+                geometry:
+                  selectedGeometry,
+
+                properties:
+                  (feature.properties ||
+                    {}) as Record<
+                    string,
+                    unknown
+                  >,
+              });
+
+            callbacksRef.current
+              .onBoundaryChange(
+                selectedGeometry
+              );
+
+            const metrics =
+              calculateBoundaryMetrics(
+                selectedGeometry
+              );
+
+            callbacksRef.current
+              .onBoundaryMetricsChange?.(
+                metrics
+              );
+
+            fitFarmBoundary(
+              map,
+              selectedGeometry
+            );
+          }
+        }
       }
-
-      if (
-        !feature.geometry ||
-        !(
-          feature.geometry.type ===
-            "Polygon" ||
-          feature.geometry.type ===
-            "MultiPolygon"
-        )
-      ) {
-        return;
-      }
-
-      const geometry =
-        feature.geometry as FarmGeometry;
-
-      callbacksRef.current.onPlotSelect?.({
-        geometry,
-
-        properties:
-          (feature.properties ||
-            {}) as Record<
-            string,
-            unknown
-          >,
-      });
-
-      fitGeometry(
-        map,
-        geometry
-      );
-    });
+    );
 
     /* =====================================================
-       DRAW SYNCHRONIZATION
+       SYNCHRONIZE DRAWN BOUNDARY
     ===================================================== */
 
-    const syncBoundary = () => {
-      if (
-        boundarySyncRef.current
-      ) {
-        return;
-      }
+    const syncBoundary =
+      () => {
+        if (
+          boundarySyncRef.current
+        ) {
+          return;
+        }
 
-      const collection =
-        draw.getAll();
+        const collection =
+          draw.getAll();
 
-      const polygons =
-        collection.features.filter(
-          (feature) =>
-            feature.geometry.type ===
-            "Polygon"
-        );
+        const polygons =
+          collection.features.filter(
+            (feature) =>
+              feature.geometry
+                .type === "Polygon"
+          );
 
-      if (
-        polygons.length === 0
-      ) {
-        callbacksRef.current.onBoundaryChange(
-          null
-        );
+        if (
+          polygons.length === 0
+        ) {
+          callbacksRef.current
+            .onBoundaryChange(
+              null
+            );
 
-        callbacksRef.current.onBoundaryMetricsChange?.(
-          null
-        );
+          callbacksRef.current
+            .onBoundaryMetricsChange?.(
+              null
+            );
 
-        return;
-      }
+          return;
+        }
 
-      const latest =
-        polygons[
-          polygons.length - 1
-        ];
+        const latest =
+          polygons[
+            polygons.length - 1
+          ];
 
-      if (
-        polygons.length > 1
-      ) {
-        polygons
-          .slice(0, -1)
-          .forEach((feature) => {
-            if (
-              feature.id !==
-              undefined
-            ) {
-              draw.delete(
-                String(feature.id)
-              );
-            }
-          });
-      }
+        /* -----------------------------------------------
+           Keep only the latest farmer-drawn polygon.
+        ------------------------------------------------ */
 
-      if (
-        latest.geometry.type !==
-        "Polygon"
-      ) {
-        return;
-      }
+        if (
+          polygons.length > 1
+        ) {
+          polygons
+            .slice(0, -1)
+            .forEach(
+              (feature) => {
+                if (
+                  feature.id !==
+                  undefined
+                ) {
+                  draw.delete(
+                    String(
+                      feature.id
+                    )
+                  );
+                }
+              }
+            );
+        }
 
-      const newBoundary: FarmGeometry =
-        {
+        if (
+          latest.geometry
+            .type !== "Polygon"
+        ) {
+          return;
+        }
+
+        const newBoundary:
+          FarmPolygonGeometry = {
           type: "Polygon",
 
           coordinates:
@@ -798,24 +848,30 @@ export default function SatelliteMap({
             ][][],
         };
 
-      const metrics =
-        calculateBoundaryMetrics(
+        const metrics =
+          calculateBoundaryMetrics(
+            newBoundary
+          );
+
+        callbacksRef.current
+          .onBoundaryChange(
+            newBoundary
+          );
+
+        callbacksRef.current
+          .onBoundaryMetricsChange?.(
+            metrics
+          );
+
+        fitFarmBoundary(
+          map,
           newBoundary
         );
+      };
 
-      callbacksRef.current.onBoundaryChange(
-        newBoundary
-      );
-
-      callbacksRef.current.onBoundaryMetricsChange?.(
-        metrics
-      );
-
-      fitGeometry(
-        map,
-        newBoundary
-      );
-    };
+    /* =====================================================
+       DRAW EVENTS
+    ===================================================== */
 
     const drawEventMap =
       map as unknown as {
@@ -840,11 +896,19 @@ export default function SatelliteMap({
       syncBoundary
     );
 
+    /* =====================================================
+       SAVE REFERENCES
+    ===================================================== */
+
     mapRef.current = map;
 
     drawRef.current = draw;
 
     markerRef.current = marker;
+
+    /* =====================================================
+       CLEANUP
+    ===================================================== */
 
     return () => {
       marker.remove();
@@ -857,223 +921,96 @@ export default function SatelliteMap({
 
       markerRef.current = null;
     };
-  }, [accessToken]);
+  }, [
+    accessToken,
+    dropPinMode,
+    cadastralGeoJson,
+  ]);
 
-  /* =======================================================
-     UPDATE CADASTRAL GEOJSON
-  ======================================================= */
-
-  useEffect(() => {
-    const map = mapRef.current;
-
-    if (!map) {
-      return;
-    }
-
-    const source =
-      map.getSource(
-        "vg-cadastral"
-      ) as mapboxgl.GeoJSONSource | undefined;
-
-    if (!source) {
-      return;
-    }
-
-    if (cadastralGeoJson) {
-      source.setData(
-        cadastralGeoJson as any
-      );
-    }
-  }, [cadastralGeoJson]);
-
-  /* =======================================================
-     UPDATE SELECTED PARCEL
-  ======================================================= */
+  /* =========================================================
+     UPDATE FARM LOCATION
+  ========================================================= */
 
   useEffect(() => {
-    const map = mapRef.current;
-
-    if (!map) {
-      return;
-    }
-
-    if (
-      !map.getLayer(
-        "vg-cadastral-fill"
-      )
-    ) {
-      return;
-    }
-
-    map.setPaintProperty(
-      "vg-cadastral-fill",
-      "fill-color",
-      [
-        "case",
-
-        [
-          "==",
-
-          [
-            "get",
-            "parcel_id",
-          ],
-
-          selectedParcelId ||
-            "",
-        ],
-
-        "#b8df4b",
-
-        "#7fc97f",
-      ]
-    );
-
-    map.setPaintProperty(
-      "vg-cadastral-fill",
-      "fill-opacity",
-      [
-        "case",
-
-        [
-          "==",
-
-          [
-            "get",
-            "parcel_id",
-          ],
-
-          selectedParcelId ||
-            "",
-        ],
-
-        0.48,
-
-        0.16,
-      ]
-    );
-
-    if (
-      map.getLayer(
-        "vg-cadastral-line"
-      )
-    ) {
-      map.setPaintProperty(
-        "vg-cadastral-line",
-        "line-color",
-        [
-          "case",
-
-          [
-            "==",
-
-            [
-              "get",
-              "parcel_id",
-            ],
-
-            selectedParcelId ||
-              "",
-          ],
-
-          "#b8df4b",
-
-          "#ffffff",
-        ]
-      );
-
-      map.setPaintProperty(
-        "vg-cadastral-line",
-        "line-width",
-        [
-          "case",
-
-          [
-            "==",
-
-            [
-              "get",
-              "parcel_id",
-            ],
-
-            selectedParcelId ||
-              "",
-          ],
-
-          4,
-
-          1.5,
-        ]
-      );
-    }
-  }, [selectedParcelId]);
-
-  /* =======================================================
-     LOCATION UPDATE
-  ======================================================= */
-
-  useEffect(() => {
-    const map = mapRef.current;
+    const map =
+      mapRef.current;
 
     const marker =
       markerRef.current;
 
-    if (!map || !marker) {
+    if (
+      !map ||
+      !marker
+    ) {
       return;
     }
 
-    const next: [
-      number,
-      number
-    ] = [
+    const next:
+      [number, number] = [
       location.longitude,
       location.latitude,
     ];
 
     marker.setLngLat(next);
 
-    if (dropPinMode) {
-      map.flyTo({
-        center: next,
+    const zoom =
+      getGpsZoom(
+        location.accuracy
+      );
 
-        zoom:
-          location.accuracy &&
-          location.accuracy <= 30
-            ? 18
-            : 16.5,
+    map.flyTo({
+      center: next,
 
-        duration: 900,
+      zoom,
 
-        essential: true,
-      });
-    }
+      pitch: 0,
+
+      bearing: 0,
+
+      duration: 1300,
+
+      essential: true,
+    });
   }, [
     location.latitude,
     location.longitude,
     location.accuracy,
-    dropPinMode,
   ]);
 
-  /* =======================================================
-     CURSOR
-  ======================================================= */
+  /* =========================================================
+     DROP PIN CURSOR
+  ========================================================= */
 
   useEffect(() => {
-    const map = mapRef.current;
+    const map =
+      mapRef.current;
 
     if (!map) {
       return;
     }
 
-    map.getCanvas().style.cursor =
-      dropPinMode
-        ? "crosshair"
-        : "";
-  }, [dropPinMode]);
+    if (dropPinMode) {
+      map.getCanvas()
+        .dataset.dropPin =
+        "true";
 
-  /* =======================================================
+      map.getCanvas()
+        .style.cursor =
+        "crosshair";
+    } else {
+      delete map.getCanvas()
+        .dataset.dropPin;
+
+      map.getCanvas()
+        .style.cursor = "";
+    }
+  }, [
+    dropPinMode,
+  ]);
+
+  /* =========================================================
      START DRAW
-  ======================================================= */
+  ========================================================= */
 
   useEffect(() => {
     if (
@@ -1091,22 +1028,26 @@ export default function SatelliteMap({
 
     draw.deleteAll();
 
-    callbacksRef.current.onBoundaryChange(
-      null
-    );
+    callbacksRef.current
+      .onBoundaryChange(
+        null
+      );
 
-    callbacksRef.current.onBoundaryMetricsChange?.(
-      null
-    );
+    callbacksRef.current
+      .onBoundaryMetricsChange?.(
+        null
+      );
 
     draw.changeMode(
       "draw_polygon"
     );
-  }, [startDrawSignal]);
+  }, [
+    startDrawSignal,
+  ]);
 
-  /* =======================================================
+  /* =========================================================
      CLEAR DRAW
-  ======================================================= */
+  ========================================================= */
 
   useEffect(() => {
     if (
@@ -1124,18 +1065,22 @@ export default function SatelliteMap({
 
     draw.deleteAll();
 
-    callbacksRef.current.onBoundaryChange(
-      null
-    );
+    callbacksRef.current
+      .onBoundaryChange(
+        null
+      );
 
-    callbacksRef.current.onBoundaryMetricsChange?.(
-      null
-    );
-  }, [clearDrawSignal]);
+    callbacksRef.current
+      .onBoundaryMetricsChange?.(
+        null
+      );
+  }, [
+    clearDrawSignal,
+  ]);
 
-  /* =======================================================
+  /* =========================================================
      SYNC EXTERNAL BOUNDARY
-  ======================================================= */
+  ========================================================= */
 
   useEffect(() => {
     const draw =
@@ -1144,16 +1089,24 @@ export default function SatelliteMap({
     const map =
       mapRef.current;
 
-    if (!draw || !map) {
+    if (
+      !draw ||
+      !map
+    ) {
       return;
     }
 
     const current =
       draw.getAll();
 
+    /* -----------------------------------------------
+       Remove map boundary when parent clears it.
+    ------------------------------------------------ */
+
     if (
       boundary === null &&
-      current.features.length > 0
+      current.features.length >
+        0
     ) {
       boundarySyncRef.current =
         true;
@@ -1166,20 +1119,14 @@ export default function SatelliteMap({
       return;
     }
 
-    /*
-     * MapboxDraw cannot directly edit
-     * MultiPolygon geometry.
-     *
-     * MultiPolygon cadastral boundaries
-     * remain rendered by the cadastral
-     * layer. Editing creates a new Polygon.
-     */
+    /* -----------------------------------------------
+       Add parent boundary to map.
+    ------------------------------------------------ */
 
     if (
       boundary &&
-      boundary.type ===
-        "Polygon" &&
-      current.features.length === 0
+      current.features.length ===
+        0
     ) {
       boundarySyncRef.current =
         true;
@@ -1189,7 +1136,8 @@ export default function SatelliteMap({
 
         properties: {},
 
-        geometry: boundary,
+        geometry:
+          boundary,
       });
 
       boundarySyncRef.current =
@@ -1200,21 +1148,28 @@ export default function SatelliteMap({
           boundary
         );
 
-      callbacksRef.current.onBoundaryMetricsChange?.(
-        metrics
-      );
+      callbacksRef.current
+        .onBoundaryMetricsChange?.(
+          metrics
+        );
 
-      fitGeometry(
+      fitFarmBoundary(
         map,
         boundary
       );
     }
-  }, [boundary]);
+  }, [
+    boundary,
+  ]);
+
+  /* =========================================================
+     RENDER
+  ========================================================= */
 
   return (
     <div
       ref={containerRef}
-      className="h-[520px] w-full overflow-hidden rounded-[24px] bg-[#0b2a1e] shadow-inner sm:h-[610px]"
+      className="h-[520px] w-full overflow-hidden rounded-[24px] bg-[#0b2a1e] sm:h-[610px]"
     />
   );
 }
