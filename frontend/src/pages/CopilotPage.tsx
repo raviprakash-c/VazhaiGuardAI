@@ -1,16 +1,16 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
+  Languages,
+  Leaf,
   Loader2,
   Mic,
   MicOff,
   Send,
   Volume2,
   VolumeX,
-  User,
-  Leaf,
-  Languages,
 } from "lucide-react";
+import ChatMessage from "../components/copilot/ChatMessage";
 import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
 import { askCopilot, getStoredFarmContext } from "../services/agentApi";
 import type { CopilotLanguage } from "../types/copilot";
@@ -49,7 +49,6 @@ export default function CopilotPage() {
   } = useVoiceAssistant();
 
   const languageName = language === "ta-IN" ? "தமிழ்" : "English";
-
   const context = useMemo(() => getStoredFarmContext(), [messages.length]);
 
   useEffect(() => {
@@ -59,6 +58,7 @@ export default function CopilotPage() {
   useEffect(() => {
     setMessages((current) => {
       if (current.length !== 1 || current[0].id !== "welcome") return current;
+
       return [
         {
           id: "welcome",
@@ -67,6 +67,7 @@ export default function CopilotPage() {
         },
       ];
     });
+
     cancelSpeech();
   }, [language, cancelSpeech]);
 
@@ -78,13 +79,15 @@ export default function CopilotPage() {
     setLiveTranscript("");
     cancelSpeech();
 
-    const userMessage: Message = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      text,
-    };
+    setMessages((current) => [
+      ...current,
+      {
+        id: `user-${Date.now()}`,
+        role: "user",
+        text,
+      },
+    ]);
 
-    setMessages((current) => [...current, userMessage]);
     setIsProcessing(true);
 
     try {
@@ -94,7 +97,8 @@ export default function CopilotPage() {
         context,
       });
 
-      const answer = result.response?.trim() ||
+      const answer =
+        result.response?.trim() ||
         (language === "ta-IN"
           ? "மன்னிக்கவும். இப்போது பதில் கிடைக்கவில்லை."
           : "Sorry, I could not produce a response right now.");
@@ -125,6 +129,7 @@ export default function CopilotPage() {
           text: fallback,
         },
       ]);
+
       console.error("[Copilot] request failed", error);
     } finally {
       setIsProcessing(false);
@@ -145,6 +150,11 @@ export default function CopilotPage() {
     setLanguage(next);
   };
 
+  const replayMessage = (message: Message) => {
+    cancelSpeech();
+    speak(message.text, language);
+  };
+
   return (
     <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <section className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -156,7 +166,9 @@ export default function CopilotPage() {
             VazhaiGuard AI Copilot
           </div>
           <h1 className="vg-heading mt-3 text-3xl font-bold tracking-[-0.04em] text-[#13271d] sm:text-4xl">
-            {language === "ta-IN" ? "பேசுங்கள். உதவி பெறுங்கள்." : "Talk to your farm assistant."}
+            {language === "ta-IN"
+              ? "பேசுங்கள். உதவி பெறுங்கள்."
+              : "Talk to your farm assistant."}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {language === "ta-IN"
@@ -205,7 +217,11 @@ export default function CopilotPage() {
               }}
               className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold"
             >
-              {autoSpeak ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+              {autoSpeak ? (
+                <Volume2 className="h-4 w-4" />
+              ) : (
+                <VolumeX className="h-4 w-4" />
+              )}
               {autoSpeak ? "Voice on" : "Voice off"}
             </button>
           </div>
@@ -213,21 +229,17 @@ export default function CopilotPage() {
           <div className="min-h-[430px] max-h-[55vh] overflow-y-auto bg-[#f8fbf9] px-4 py-5 sm:px-6">
             <div className="mx-auto max-w-3xl space-y-4">
               {messages.map((message) => (
-                <div key={message.id} className={`flex gap-3 ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                  {message.role === "assistant" && (
-                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#b8df4b]">
-                      <Bot className="h-4 w-4 text-[#073b2a]" />
-                    </div>
-                  )}
-                  <div className={`max-w-[82%] rounded-2xl px-4 py-3 text-sm leading-6 ${message.role === "user" ? "rounded-br-md bg-[#073b2a] text-white" : "rounded-bl-md border border-[#dce9e0] bg-white text-[#13271d]"}`}>
-                    {message.text}
-                  </div>
-                  {message.role === "user" && (
-                    <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#e8f0eb]">
-                      <User className="h-4 w-4 text-[#146c43]" />
-                    </div>
-                  )}
-                </div>
+                <ChatMessage
+                  key={message.id}
+                  role={message.role}
+                  text={message.text}
+                  onSpeak={
+                    message.role === "assistant"
+                      ? () => replayMessage(message)
+                      : undefined
+                  }
+                  isSpeaking={isSpeaking}
+                />
               ))}
 
               {liveTranscript && (
@@ -241,15 +253,19 @@ export default function CopilotPage() {
               {isProcessing && (
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  {language === "ta-IN" ? "உங்கள் கேள்வியை புரிந்துகொள்கிறேன்..." : "Understanding your question..."}
+                  {language === "ta-IN"
+                    ? "உங்கள் கேள்வியை புரிந்துகொள்கிறேன்..."
+                    : "Understanding your question..."}
                 </div>
               )}
               <div ref={messagesEndRef} />
             </div>
           </div>
 
-          {(voiceError) && (
-            <div className="border-t border-red-100 bg-red-50 px-5 py-3 text-xs text-red-700">{voiceError}</div>
+          {voiceError && (
+            <div className="border-t border-red-100 bg-red-50 px-5 py-3 text-xs text-red-700">
+              {voiceError}
+            </div>
           )}
 
           <div className="border-t border-border bg-white p-4 sm:p-5">
@@ -261,7 +277,11 @@ export default function CopilotPage() {
                   if (event.key === "Enter") void submit(input);
                 }}
                 disabled={isProcessing || isListening}
-                placeholder={language === "ta-IN" ? "இங்கே type செய்யலாம்..." : "Type your question..."}
+                placeholder={
+                  language === "ta-IN"
+                    ? "இங்கே type செய்யலாம்..."
+                    : "Type your question..."
+                }
                 className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none"
               />
               <button
@@ -280,13 +300,21 @@ export default function CopilotPage() {
                 className={`flex h-11 w-11 items-center justify-center rounded-xl ${isListening ? "bg-red-600 text-white" : "bg-[#b8df4b] text-[#073b2a]"}`}
                 aria-label={isListening ? "Stop listening" : "Start listening"}
               >
-                {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
+                {isListening ? (
+                  <MicOff className="h-5 w-5" />
+                ) : (
+                  <Mic className="h-5 w-5" />
+                )}
               </button>
             </div>
             <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-muted-foreground">
               {isListening
-                ? language === "ta-IN" ? "கேட்கிறேன்... பேசுங்கள்." : "Listening... speak now."
-                : language === "ta-IN" ? "மைக்ரோஃபோனை அழுத்தி பேசலாம் அல்லது type செய்யலாம்." : "Press the microphone or type your question."}
+                ? language === "ta-IN"
+                  ? "கேட்கிறேன்... பேசுங்கள்."
+                  : "Listening... speak now."
+                : language === "ta-IN"
+                  ? "மைக்ரோஃபோனை அழுத்தி பேசலாம் அல்லது type செய்யலாம்."
+                  : "Press the microphone or type your question."}
             </p>
           </div>
         </section>
