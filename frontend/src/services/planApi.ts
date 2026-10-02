@@ -1,11 +1,17 @@
 import type { WeatherData } from "../types/weather";
 import type { WeatherActionPlan } from "../types/plan";
 import { getWeatherDerivedRisk } from "./riskApi";
+import {
+  buildFarmerDecisionPlan,
+  saveFarmerDecisionPlan,
+} from "../utils/farmerDecisionEngine";
 
 export function getWeatherActionPlan(
   weather: WeatherData
 ): WeatherActionPlan {
   const risk = getWeatherDerivedRisk(weather);
+  const decision = buildFarmerDecisionPlan(weather);
+  saveFarmerDecisionPlan(decision);
 
   const before = [
     {
@@ -79,31 +85,17 @@ export function getWeatherActionPlan(
     },
   ];
 
-  if (risk.level === "high") {
-    return {
-      summary:
-        "A strong weather window is expected. Focus on support, drainage, and reducing field exposure.",
-      summaryTa:
-        "பலத்த காற்று மற்றும் மழை காலம் எதிர்பார்க்கப்படுகிறது. ஆதரவு, வடிகால் மற்றும் வயல் வெளிப்பாட்டைக் குறைப்பதில் கவனம் செலுத்துங்கள்.",
-      steps: [...before.slice(0, 2), ...during, ...after.slice(0, 1)],
-    };
-  }
-
-  if (risk.level === "moderate") {
-    return {
-      summary:
-        "The next 24 hours need proactive monitoring and careful irrigation timing.",
-      summaryTa:
-        "அடுத்த 24 மணி நேரத்தில் முன்கூட்டியே கண்காணிப்பு மற்றும் கவனமான பாசன நேரம் தேவைப்படுகிறது.",
-      steps: [...before.slice(0, 2), ...during, ...after],
-    };
-  }
+  const baseSteps =
+    risk.level === "high"
+      ? [...before.slice(0, 2), ...during, ...after.slice(0, 1)]
+      : risk.level === "moderate"
+        ? [...before.slice(0, 2), ...during, ...after]
+        : [before[0], before[1], during[0], after[0]];
 
   return {
-    summary:
-        "Conditions are relatively calm. Maintain normal checks and keep drainage clear.",
-    summaryTa:
-        "நிலை ஒப்பீட்டளவில் சுமாராக உள்ளது. வழக்கமான கண்காணிப்பை தொடருங்கள், வடிகால் பாதையை சுத்தமாக வைத்திருங்கள்.",
-    steps: [before[0], before[1], during[0], after[0]],
+    summary: decision.headline,
+    summaryTa: decision.headlineTa,
+    steps: baseSteps,
+    decision,
   };
 }
