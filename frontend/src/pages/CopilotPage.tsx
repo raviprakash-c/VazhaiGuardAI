@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Bot,
+  CheckCircle2,
   Languages,
   Leaf,
   Loader2,
   Mic,
   MicOff,
   Send,
+  Sparkles,
   Volume2,
   VolumeX,
 } from "lucide-react";
@@ -21,10 +23,16 @@ interface Message {
   text: string;
 }
 
+type ConversationStage =
+  | "ready"
+  | "listening"
+  | "thinking"
+  | "speaking";
+
 const initialTamil =
-  "வணக்கம்! நான் VazhaiGuard AI. உங்கள் தோட்டம், மழை, காற்று அல்லது பயிர் பற்றிய கேள்வியை கேளுங்கள்.";
+  "வணக்கம்! நான் VazhaiGuard AI. உங்கள் தோட்டம், மழை, காற்று அல்லது பயிர் பற்றி கேளுங்கள்.";
 const initialEnglish =
-  "Hello! I am VazhaiGuard AI. Ask me about your farm, weather, wind, rain, or crop.";
+  "Hello! I am VazhaiGuard AI. Ask me about your farm, weather, rain, wind, or crop.";
 
 export default function CopilotPage() {
   const [language, setLanguage] = useState<CopilotLanguage>("ta-IN");
@@ -34,7 +42,14 @@ export default function CopilotPage() {
   const [input, setInput] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [autoSpeak, setAutoSpeak] = useState(true);
+  const [handsFree, setHandsFree] = useState(true);
+  const [stage, setStage] = useState<ConversationStage>("ready");
+  const [lastAnswerId, setLastAnswerId] = useState<string | null>(null);
+  const [lastQuestionId, setLastQuestionId] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
+  const autoListenPendingRef = useRef(false);
+  const speechStartedRef = useRef(false);
+  const submitRef = useRef<(text: string) => Promise<void>>(async () => undefined);
 
   const {
     isListening,
@@ -58,7 +73,6 @@ export default function CopilotPage() {
   useEffect(() => {
     setMessages((current) => {
       if (current.length !== 1 || current[0].id !== "welcome") return current;
-
       return [
         {
           id: "welcome",
@@ -67,25 +81,43 @@ export default function CopilotPage() {
         },
       ];
     });
-
+    autoListenPendingRef.current = false;
+    speechStartedRef.current = false;
     cancelSpeech();
-  }, [language, cancelSpeech]);
+    stopListening();
+    setStage("ready");
+  }, [language, cancelSpeech, stopListening]);
+
+  const beginListening = () => {
+    if (isProcessing || isSpeaking) return;
+
+    setInput("");
+    setLiveTranscript("");
+    cancelSpeech();
+    setStage("listening");
+
+    startListening(language, (transcript) => {
+      void submitRef.current(transcript);
+    });
+  };
 
   const submit = async (rawText: string) => {
     const text = rawText.trim();
     if (!text || isProcessing) return;
 
+    autoListenPendingRef.current = handsFree && autoSpeak;
+    speechStartedRef.current = false;
+
     setInput("");
     setLiveTranscript("");
     cancelSpeech();
+    setStage("thinking");
 
+    const questionId = `user-${Date.now()}`;
+    setLastQuestionId(questionId);
     setMessages((current) => [
       ...current,
-      {
-        id: `user-${Date.now()}`,
-        role: "user",
-        text,
-      },
+      { id: questionId, role: "user", text },
     ]);
 
     setIsProcessing(true);
@@ -103,60 +135,120 @@ export default function CopilotPage() {
           ? "மன்னிக்கவும். இப்போது பதில் கிடைக்கவில்லை."
           : "Sorry, I could not produce a response right now.");
 
+      const answerId = `assistant-${Date.now()}`;
+      setLastAnswerId(answerId);
       setMessages((current) => [
         ...current,
-        {
-          id: `assistant-${Date.now()}`,
-          role: "assistant",
-          text: answer,
-        },
+        { id: answerId, role: "assistant", text: answer },
       ]);
 
+      setIsProcessing(false);
+      setStage(autoSpeak ? "speaking" : "ready");
+
       if (autoSpeak) {
-        window.setTimeout(() => speak(answer, language), 120);
+        window.setTimeout(() => speak(answer, language), 100);
+      } else {
+        autoListenPendingRef.current = false;
       }
     } catch (error) {
+      console.error("[Copilot] request failed", error);
+      autoListenPendingRef.current = false;
+      setIsProcessing(false);
+      setStage("ready");
+
       const fallback =
         language === "ta-IN"
           ? "மன்னிக்கவும். AI சேவையுடன் தொடர்பு கொள்ள முடியவில்லை. Backend இயங்குகிறதா என்று சரிபார்க்கவும்."
           : "Sorry. I could not reach the AI service. Please check that the backend is running.";
 
+      const answerId = `error-${Date.now()}`;
+      setLastAnswerId(answerId);
       setMessages((current) => [
         ...current,
-        {
-          id: `error-${Date.now()}`,
-          role: "assistant",
-          text: fallback,
-        },
+        { id: answerId, role: "assistant", text: fallback },
       ]);
-
-      console.error("[Copilot] request failed", error);
-    } finally {
-      setIsProcessing(false);
     }
   };
 
-  const beginListening = () => {
+  submitRef.current = submit;
+
+  /*
+   * Synchronize the conversation with speech playback.
+   * We only reopen the microphone after speech has actually
+   * started and then finished. This prevents the microphone
+   * from hearing VazhaiGuard's own answer.
+   */
+  useEffect(() => {
+    if (!autoListenPendingRef.current) return;
+
+    if (isSpeaking) {
+      speechStartedRef.current = true;
+      setStage("speaking");
+      return;
+    }
+
+    if (!speechStartedRef.current || isProcessing || isListening) return;
+
+    autoListenPendingRef.current = false;
+    speechStartedRef.current = false;
+
+    const timer = window.setTimeout(() => {
+      if (handsFree && autoSpeak && !isProcessing) {
+        beginListening();
+      } else {
+        setStage("ready");
+      }
+    }, 350);
+
+    return () => window.clearTimeout(timer);
+  }, [isSpeaking, isProcessing, isListening, handsFree, autoSpeak]);
+
+  useEffect(() => {
+    if (isListening) setStage("listening");
+    else if (isProcessing) setStage("thinking");
+  }, [isListening, isProcessing]);
+
+  const stopConversation = () => {
+    autoListenPendingRef.current = false;
+    speechStartedRef.current = false;
+    stopListening();
     cancelSpeech();
-    startListening(language, (transcript) => {
-      void submit(transcript);
-    });
+    setStage("ready");
   };
 
   const toggleLanguage = (next: CopilotLanguage) => {
     if (next === language) return;
-    stopListening();
-    cancelSpeech();
+    stopConversation();
     setLanguage(next);
   };
 
   const replayMessage = (message: Message) => {
+    autoListenPendingRef.current = false;
+    speechStartedRef.current = false;
     cancelSpeech();
+    setStage("speaking");
     speak(message.text, language);
   };
 
+  const statusText =
+    stage === "listening"
+      ? language === "ta-IN"
+        ? "கேட்கிறேன் — பேசுங்கள்"
+        : "Listening — speak now"
+      : stage === "thinking"
+        ? language === "ta-IN"
+          ? "உங்கள் கேள்வியை புரிந்துகொள்கிறேன்..."
+          : "Understanding your question..."
+        : stage === "speaking"
+          ? language === "ta-IN"
+            ? "பதில் சொல்கிறேன்..."
+            : "Speaking the answer..."
+          : language === "ta-IN"
+            ? "அடுத்த கேள்விக்கு தயாராக உள்ளது"
+            : "Ready for your next question";
+
   return (
-    <div className="mx-auto w-full max-w-[1200px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
+    <div className="mx-auto w-full max-w-[1240px] px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
       <section className="mb-6 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.13em] text-[#146c43]">
@@ -166,18 +258,16 @@ export default function CopilotPage() {
             VazhaiGuard AI Copilot
           </div>
           <h1 className="vg-heading mt-3 text-3xl font-bold tracking-[-0.04em] text-[#13271d] sm:text-4xl">
-            {language === "ta-IN"
-              ? "பேசுங்கள். உதவி பெறுங்கள்."
-              : "Talk to your farm assistant."}
+            {language === "ta-IN" ? "பேசுங்கள். பதில் கேளுங்கள்." : "Talk naturally with your farm assistant."}
           </h1>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
             {language === "ta-IN"
-              ? "உங்கள் தோட்டம் மற்றும் தற்போதைய தகவல்களை வைத்து எளிமையாக பதில் அளிக்கிறது."
-              : "Get simple answers using your available farm and weather context."}
+              ? "விவசாயி ஒரு கேள்வி கேட்பார். AI பதில் சொல்வது முடிந்ததும் அடுத்த கேள்விக்காக தானாகவே கேட்கும்."
+              : "Ask one question by voice. After the answer finishes, the assistant automatically listens for the next question."}
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex rounded-2xl border border-border bg-white p-1 shadow-sm">
             <button
               type="button"
@@ -197,9 +287,9 @@ export default function CopilotPage() {
         </div>
       </section>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+      <div className="grid gap-5 lg:grid-cols-[1fr_310px]">
         <section className="overflow-hidden rounded-3xl border border-[#dce9e0] bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-border px-5 py-4">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-border px-5 py-4">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#eaf5ec]">
                 <Leaf className="h-5 w-5 text-[#146c43]" />
@@ -209,53 +299,92 @@ export default function CopilotPage() {
                 <p className="text-[11px] text-muted-foreground">{languageName}</p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={() => {
-                setAutoSpeak((value) => !value);
-                if (isSpeaking) cancelSpeech();
-              }}
-              className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold"
-            >
-              {autoSpeak ? (
-                <Volume2 className="h-4 w-4" />
-              ) : (
-                <VolumeX className="h-4 w-4" />
-              )}
-              {autoSpeak ? "Voice on" : "Voice off"}
-            </button>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setHandsFree((value) => !value);
+                  if (handsFree) stopConversation();
+                }}
+                className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold ${handsFree ? "border-[#b8df4b] bg-[#f3f9dc] text-[#073b2a]" : "border-border"}`}
+              >
+                <Sparkles className="h-4 w-4" />
+                {handsFree ? "Hands-free" : "Manual voice"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAutoSpeak((value) => !value);
+                  if (autoSpeak) stopConversation();
+                }}
+                className="flex items-center gap-2 rounded-xl border border-border px-3 py-2 text-xs font-semibold"
+              >
+                {autoSpeak ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+                {autoSpeak ? "Voice on" : "Voice off"}
+              </button>
+            </div>
           </div>
 
-          <div className="min-h-[430px] max-h-[55vh] overflow-y-auto bg-[#f8fbf9] px-4 py-5 sm:px-6">
+          <div className="border-b border-[#dce9e0] bg-[#073b2a] px-5 py-3 text-white">
+            <div className="flex items-center gap-3">
+              <div className={`h-2.5 w-2.5 rounded-full ${stage === "listening" ? "animate-pulse bg-[#b8df4b]" : "bg-white/60"}`} />
+              <div className="flex-1">
+                <p className="text-xs font-bold">{statusText}</p>
+                <p className="mt-0.5 text-[10px] text-white/60">
+                  {handsFree && autoSpeak
+                    ? language === "ta-IN"
+                      ? "பதில் முடிந்ததும் அடுத்த கேள்விக்காக தானாக கேட்கும்"
+                      : "Microphone reopens automatically after the spoken answer"
+                    : language === "ta-IN"
+                      ? "அடுத்த கேள்விக்கு microphone-ஐ அழுத்துங்கள்"
+                      : "Press the microphone for the next question"}
+                </p>
+              </div>
+              {stage === "speaking" && <Volume2 className="h-4 w-4 animate-pulse" />}
+              {stage === "ready" && <CheckCircle2 className="h-4 w-4 text-[#b8df4b]" />}
+            </div>
+          </div>
+
+          <div className="min-h-[460px] max-h-[58vh] overflow-y-auto bg-[#f8fbf9] px-4 py-5 sm:px-6">
             <div className="mx-auto max-w-3xl space-y-4">
               {messages.map((message) => (
-                <ChatMessage
-                  key={message.id}
-                  role={message.role}
-                  text={message.text}
-                  onSpeak={
-                    message.role === "assistant"
-                      ? () => replayMessage(message)
-                      : undefined
-                  }
-                  isSpeaking={isSpeaking}
-                />
+                <div key={message.id} className="relative">
+                  <ChatMessage
+                    role={message.role}
+                    text={message.text}
+                    onSpeak={message.role === "assistant" ? () => replayMessage(message) : undefined}
+                    isSpeaking={isSpeaking && message.id === lastAnswerId}
+                  />
+                  {message.id === lastQuestionId && (
+                    <p className="mt-1 text-right text-[10px] font-medium text-[#7a8b82]">
+                      {language === "ta-IN" ? "உங்கள் கேள்வி" : "Your question"}
+                    </p>
+                  )}
+                  {message.id === lastAnswerId && (
+                    <p className="mt-1 flex items-center justify-end gap-1 text-[10px] font-medium text-[#146c43]">
+                      <CheckCircle2 className="h-3 w-3" />
+                      {language === "ta-IN" ? "AI பதில்" : "AI answer"}
+                    </p>
+                  )}
+                </div>
               ))}
 
               {liveTranscript && (
                 <div className="flex justify-end gap-3">
-                  <div className="max-w-[82%] rounded-2xl rounded-br-md border border-[#b8df4b] bg-[#f3f9dc] px-4 py-3 text-sm text-[#13271d]">
+                  <div className="max-w-[86%] rounded-2xl rounded-br-md border border-[#b8df4b] bg-[#f3f9dc] px-4 py-3 text-sm text-[#13271d] shadow-sm">
+                    <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-[#5e7924]">
+                      {language === "ta-IN" ? "நீங்கள் சொல்வது" : "You said"}
+                    </p>
                     {liveTranscript}
                   </div>
                 </div>
               )}
 
               {isProcessing && (
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  {language === "ta-IN"
-                    ? "உங்கள் கேள்வியை புரிந்துகொள்கிறேன்..."
-                    : "Understanding your question..."}
+                <div className="flex items-center gap-2 rounded-2xl border border-[#dce9e0] bg-white px-4 py-3 text-xs text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin text-[#146c43]" />
+                  {language === "ta-IN" ? "உங்கள் கேள்வியை புரிந்துகொள்கிறேன்..." : "Understanding your question..."}
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -277,11 +406,7 @@ export default function CopilotPage() {
                   if (event.key === "Enter") void submit(input);
                 }}
                 disabled={isProcessing || isListening}
-                placeholder={
-                  language === "ta-IN"
-                    ? "இங்கே type செய்யலாம்..."
-                    : "Type your question..."
-                }
+                placeholder={language === "ta-IN" ? "இங்கே type செய்யலாம்..." : "Type your question..."}
                 className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none"
               />
               <button
@@ -295,55 +420,63 @@ export default function CopilotPage() {
               </button>
               <button
                 type="button"
-                onClick={isListening ? stopListening : beginListening}
-                disabled={isProcessing}
-                className={`flex h-11 w-11 items-center justify-center rounded-xl ${isListening ? "bg-red-600 text-white" : "bg-[#b8df4b] text-[#073b2a]"}`}
+                onClick={isListening ? stopConversation : beginListening}
+                disabled={isProcessing || isSpeaking}
+                className={`flex h-11 min-w-11 items-center justify-center rounded-xl px-3 ${isListening ? "bg-red-600 text-white" : "bg-[#b8df4b] text-[#073b2a]"}`}
                 aria-label={isListening ? "Stop listening" : "Start listening"}
               >
-                {isListening ? (
-                  <MicOff className="h-5 w-5" />
-                ) : (
-                  <Mic className="h-5 w-5" />
-                )}
+                {isListening ? <MicOff className="h-5 w-5" /> : <Mic className="h-5 w-5" />}
               </button>
             </div>
             <p className="mx-auto mt-2 max-w-3xl text-center text-[10px] text-muted-foreground">
-              {isListening
-                ? language === "ta-IN"
-                  ? "கேட்கிறேன்... பேசுங்கள்."
-                  : "Listening... speak now."
-                : language === "ta-IN"
-                  ? "மைக்ரோஃபோனை அழுத்தி பேசலாம் அல்லது type செய்யலாம்."
-                  : "Press the microphone or type your question."}
+              {statusText}
             </p>
           </div>
         </section>
 
-        <aside className="h-fit rounded-3xl border border-[#dce9e0] bg-[#073b2a] p-5 text-white shadow-sm">
+        <aside className="h-fit rounded-3xl border border-[#dce9e0] bg-[#073b2a] p-5 text-white shadow-sm lg:sticky lg:top-6">
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#b8df4b]">
               <Leaf className="h-5 w-5 text-[#073b2a]" />
             </div>
             <div>
-              <p className="text-sm font-bold">Farm-aware assistant</p>
-              <p className="text-[10px] text-white/55">VazhaiGuard AI</p>
+              <p className="text-sm font-bold">Farmer Voice Assistant</p>
+              <p className="text-[10px] text-white/55">{languageName} • VazhaiGuard AI</p>
             </div>
           </div>
 
-          <div className="mt-5 space-y-3 text-xs leading-5 text-white/75">
-            <div className="rounded-2xl bg-white/[0.07] p-3">
-              <p className="font-semibold text-white">1. கேளுங்கள்</p>
-              <p className="mt-1">மழை, காற்று, வாழை, தோட்டம் பற்றி கேளுங்கள்.</p>
+          <div className="mt-5 space-y-3">
+            <div className={`rounded-2xl p-3 ${stage === "listening" ? "bg-[#b8df4b] text-[#073b2a]" : "bg-white/[0.07]"}`}>
+              <p className="text-xs font-bold">1. 🎙️ {language === "ta-IN" ? "பேசுங்கள்" : "Speak"}</p>
+              <p className="mt-1 text-[11px] opacity-75">{language === "ta-IN" ? "விவசாயி தனது கேள்வியை இயல்பாக பேசலாம்." : "Ask your question naturally."}</p>
             </div>
-            <div className="rounded-2xl bg-white/[0.07] p-3">
-              <p className="font-semibold text-white">2. புரிந்துகொள்கிறேன்</p>
-              <p className="mt-1">AI உங்கள் கேள்வியை விவசாய சூழலில் புரிந்துகொள்ளும்.</p>
+            <div className={`rounded-2xl p-3 ${stage === "thinking" ? "bg-[#b8df4b] text-[#073b2a]" : "bg-white/[0.07]"}`}>
+              <p className="text-xs font-bold">2. 🧠 {language === "ta-IN" ? "புரிந்துகொள்கிறது" : "Understand"}</p>
+              <p className="mt-1 text-[11px] opacity-75">{language === "ta-IN" ? "AI உங்கள் farm context-ஐ பயன்படுத்துகிறது." : "AI uses the available farm context."}</p>
             </div>
-            <div className="rounded-2xl bg-white/[0.07] p-3">
-              <p className="font-semibold text-white">3. பதில்</p>
-              <p className="mt-1">எளிய பதிலும் அடுத்த நடைமுறை நடவடிக்கையும் வழங்கப்படும்.</p>
+            <div className={`rounded-2xl p-3 ${stage === "speaking" ? "bg-[#b8df4b] text-[#073b2a]" : "bg-white/[0.07]"}`}>
+              <p className="text-xs font-bold">3. 🔊 {language === "ta-IN" ? "பதில் சொல்கிறது" : "Answer"}</p>
+              <p className="mt-1 text-[11px] opacity-75">{language === "ta-IN" ? "பதில் திரையிலும் குரலிலும் கிடைக்கும்." : "The answer is shown and spoken."}</p>
+            </div>
+            <div className={`rounded-2xl p-3 ${stage === "ready" ? "bg-[#b8df4b] text-[#073b2a]" : "bg-white/[0.07]"}`}>
+              <p className="text-xs font-bold">4. 🔁 {language === "ta-IN" ? "அடுத்த கேள்வி" : "Next question"}</p>
+              <p className="mt-1 text-[11px] opacity-75">{language === "ta-IN" ? "Hands-free mode-ல் தானாக மீண்டும் கேட்கும்." : "Hands-free mode automatically listens again."}</p>
             </div>
           </div>
+
+          <button
+            type="button"
+            onClick={isListening || isSpeaking ? stopConversation : beginListening}
+            disabled={isProcessing}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-2xl bg-[#b8df4b] px-4 py-3 text-sm font-bold text-[#073b2a] disabled:opacity-50"
+          >
+            {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            {isListening
+              ? language === "ta-IN" ? "பேசுவதை நிறுத்து" : "Stop listening"
+              : isSpeaking
+                ? language === "ta-IN" ? "குரலை நிறுத்து" : "Stop voice"
+                : language === "ta-IN" ? "🎙️ இப்போது பேசுங்கள்" : "🎙️ Start speaking"}
+          </button>
         </aside>
       </div>
     </div>
