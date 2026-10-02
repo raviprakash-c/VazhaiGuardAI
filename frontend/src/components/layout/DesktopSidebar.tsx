@@ -48,21 +48,21 @@ const primaryNavigation = [
     name: "Weather & Alerts",
     icon: CloudSun,
     path: "/weather",
-    enabled: false,
+    enabled: true,
   },
 
   {
     name: "Risk Analysis",
     icon: ShieldAlert,
     path: "/risk",
-    enabled: false,
+    enabled: true,
   },
 
   {
     name: "Storm Plan",
     icon: Sparkles,
     path: "/plan",
-    enabled: false,
+    enabled: true,
   },
 
   {

@@ -18,7 +18,8 @@ import {
   MapPin,
   RefreshCw,
   ShieldCheck,
-  Sprout,
+  //Sprout,
+  ThermometerSun,
   Wind,
 } from "lucide-react";
 
@@ -26,8 +27,15 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
 import { useWeather } from "../hooks/useWeather";
-import type { WeatherData } from "../types/weather";
+//import type { WeatherData } from "../types/weather";
 
+import {
+  getWeatherIntelligence,
+  type WeatherInsight,
+  type WeatherRiskLevel,
+} from "../utils/weatherIntelligence";
+
+type Language = "en" | "ta";
 
 type SavedFarm = {
   location?: {
@@ -47,48 +55,14 @@ type SavedFarm = {
     district?: string;
     taluk?: string;
     village?: string;
-    survey_number?: string;
-    subdivision?: string | null;
   };
 };
-
-
-type FarmProfileStore = {
-  profile?: {
-    farm_summary?: {
-      farm_name?: string;
-      crop?: string;
-      variety?: string;
-      planting_age?: string;
-      approximate_plants?: number | null;
-    };
-  };
-};
-
-
-type WeatherWatch = {
-  level:
-    | "calm"
-    | "active"
-    | "strong";
-
-  label: string;
-  title: string;
-  summary: string;
-
-  className: string;
-  iconClassName: string;
-
-  Icon: typeof CloudSun;
-};
-
 
 function readSavedFarm(): SavedFarm | null {
   try {
-    const raw =
-      localStorage.getItem(
-        "vazhaiguard_farm_complete"
-      );
+    const raw = localStorage.getItem(
+      "vazhaiguard_farm_complete"
+    );
 
     if (!raw) {
       return null;
@@ -99,25 +73,6 @@ function readSavedFarm(): SavedFarm | null {
     return null;
   }
 }
-
-
-function readAiProfile(): FarmProfileStore | null {
-  try {
-    const raw =
-      localStorage.getItem(
-        "vazhaiguard_ai_profile"
-      );
-
-    if (!raw) {
-      return null;
-    }
-
-    return JSON.parse(raw) as FarmProfileStore;
-  } catch {
-    return null;
-  }
-}
-
 
 function formatDirection(
   degrees: number
@@ -136,16 +91,12 @@ function formatDirection(
   const normalized =
     ((degrees % 360) + 360) % 360;
 
-  const index =
-    Math.round(
-      normalized / 45
-    ) % 8;
-
-  return directions[index];
+  return directions[
+    Math.round(normalized / 45) % 8
+  ];
 }
 
-
-function formatWeatherTime(
+function formatTime(
   value: string,
   timezone: string
 ): string {
@@ -153,14 +104,9 @@ function formatWeatherTime(
     return "—";
   }
 
-  const parsed =
-    new Date(value);
+  const parsed = new Date(value);
 
-  if (
-    Number.isNaN(
-      parsed.getTime()
-    )
-  ) {
+  if (Number.isNaN(parsed.getTime())) {
     return value;
   }
 
@@ -187,93 +133,176 @@ function formatWeatherTime(
   }
 }
 
+function riskStyle(
+  level: WeatherRiskLevel
+) {
+  switch (level) {
+    case "danger":
+      return {
+        card: "border-red-200 bg-red-50",
+        icon: "bg-red-100 text-red-700",
+        badge:
+          "bg-red-100 text-red-700",
+        bar: "bg-red-500",
+      };
 
-function getWeatherWatch(
-  weather: WeatherData | null
-): WeatherWatch {
-  if (!weather) {
-    return {
-      level: "calm",
-      label: "Waiting for weather",
-      title:
-        "Connect your registered farm location",
-      summary:
-        "VazhaiGuard needs the saved farm coordinates before it can read live weather conditions.",
-      className:
-        "border-[#dfe9e2] bg-[#f8faf8]",
-      iconClassName:
-        "bg-[#edf7ef] text-[#146c43]",
-      Icon: MapPin,
-    };
+    case "warning":
+      return {
+        card:
+          "border-orange-200 bg-orange-50",
+        icon:
+          "bg-orange-100 text-orange-700",
+        badge:
+          "bg-orange-100 text-orange-700",
+        bar: "bg-orange-500",
+      };
+
+    case "watch":
+      return {
+        card:
+          "border-yellow-200 bg-yellow-50",
+        icon:
+          "bg-yellow-100 text-yellow-700",
+        badge:
+          "bg-yellow-100 text-yellow-700",
+        bar: "bg-yellow-500",
+      };
+
+    default:
+      return {
+        card:
+          "border-green-200 bg-green-50",
+        icon:
+          "bg-green-100 text-green-700",
+        badge:
+          "bg-green-100 text-green-700",
+        bar: "bg-green-500",
+      };
   }
-
-  const rain =
-    weather.next_24_hours
-      .max_rain_probability;
-
-  const rainfall =
-    weather.next_24_hours
-      .total_precipitation;
-
-  const gust =
-    weather.next_24_hours
-      .max_wind_gust;
-
-  if (
-    rain >= 85 ||
-    rainfall >= 20 ||
-    gust >= 45
-  ) {
-    return {
-      level: "strong",
-      label: "Strong weather watch",
-      title:
-        "Conditions need closer attention",
-      summary:
-        "The next 24 hours show stronger rain or wind-gust conditions. This is a weather signal for closer monitoring, not a crop-damage prediction.",
-      className:
-        "border-[#efc4c0] bg-[#fff8f7]",
-      iconClassName:
-        "bg-[#fde8e6] text-[#c13c34]",
-      Icon: AlertTriangle,
-    };
-  }
-
-  if (
-    rain >= 50 ||
-    rainfall >= 8 ||
-    gust >= 25
-  ) {
-    return {
-      level: "active",
-      label: "Active weather watch",
-      title:
-        "Keep watching the forecast",
-      summary:
-        "Rain or wind may become noticeable during the next 24 hours. Check again before important field work.",
-      className:
-        "border-[#f0dfb2] bg-[#fffbf2]",
-      iconClassName:
-        "bg-[#fff3d6] text-[#b8780a]",
-      Icon: CloudRain,
-    };
-  }
-
-  return {
-    level: "calm",
-    label: "Light weather watch",
-    title:
-      "Forecast currently looks relatively calm",
-    summary:
-      "The current 24-hour forecast does not show stronger rain or gust values in this simple weather view. Continue normal monitoring.",
-    className:
-      "border-[#cae6d2] bg-[#f6fcf7]",
-    iconClassName:
-      "bg-[#e5f6eb] text-[#177944]",
-    Icon: CloudSun,
-  };
 }
 
+function riskLabel(
+  level: WeatherRiskLevel,
+  language: Language
+) {
+  if (language === "ta") {
+    switch (level) {
+      case "danger":
+        return "மிகவும் கவனம்";
+
+      case "warning":
+        return "எச்சரிக்கை";
+
+      case "watch":
+        return "கவனிக்கவும்";
+
+      default:
+        return "சாதாரணம்";
+    }
+  }
+
+  switch (level) {
+    case "danger":
+      return "High attention";
+
+    case "warning":
+      return "Warning";
+
+    case "watch":
+      return "Watch";
+
+    default:
+      return "Normal";
+  }
+}
+
+function InsightCard({
+  insight,
+  language,
+}: {
+  insight: WeatherInsight;
+  language: Language;
+}) {
+  const style =
+    riskStyle(insight.level);
+
+  const Icon =
+    insight.type === "rain"
+      ? CloudRain
+      : insight.type === "wind"
+        ? Wind
+        : insight.type === "heat"
+          ? ThermometerSun
+          : Droplets;
+
+  const title =
+    language === "ta"
+      ? insight.titleTa
+      : insight.title;
+
+  const message =
+    language === "ta"
+      ? insight.messageTa
+      : insight.message;
+
+  const action =
+    language === "ta"
+      ? insight.actionTa
+      : insight.action;
+
+  return (
+    <div
+      className={`rounded-[24px] border p-5 ${style.card}`}
+    >
+      <div className="flex items-start gap-4">
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${style.icon}`}
+        >
+          <Icon className="h-5 w-5" />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h4 className="font-bold text-[#13271d]">
+              {title}
+            </h4>
+
+            <span
+              className={`rounded-full px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide ${style.badge}`}
+            >
+              {riskLabel(
+                insight.level,
+                language
+              )}
+            </span>
+          </div>
+
+          <p className="mt-2 text-sm leading-6 text-[#596a60]">
+            {message}
+          </p>
+
+          <div className="mt-4 rounded-xl bg-white/70 p-3">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-[#718078]">
+              {language === "ta"
+                ? "விவசாயி செய்ய வேண்டியது"
+                : "Recommended action"}
+            </p>
+
+            <p className="mt-1 text-sm font-semibold leading-5 text-[#13271d]">
+              {action}
+            </p>
+          </div>
+
+          {insight.value && (
+            <p className="mt-3 text-xs font-bold text-[#146c43]">
+              {insight.value}
+            </p>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function MetricCard({
   icon: Icon,
@@ -287,18 +316,12 @@ function MetricCard({
   helper: string;
 }) {
   return (
-    <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-[0_12px_35px_rgba(7,59,42,0.05)]">
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eef7f0]">
-          <Icon className="h-5 w-5 text-[#146c43]" />
-        </div>
-
-        <span className="rounded-full bg-[#f5f8f5] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-[#718078]">
-          Live
-        </span>
+    <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
+      <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eef7f0]">
+        <Icon className="h-5 w-5 text-[#146c43]" />
       </div>
 
-      <p className="mt-5 text-[11px] font-bold uppercase tracking-[0.13em] text-[#718078]">
+      <p className="mt-5 text-[10px] font-bold uppercase tracking-[0.13em] text-[#718078]">
         {label}
       </p>
 
@@ -313,124 +336,62 @@ function MetricCard({
   );
 }
 
-
-function ForecastMetric({
-  icon: Icon,
-  label,
-  value,
-  explanation,
-}: {
-  icon: typeof Wind;
-  label: string;
-  value: string;
-  explanation: string;
-}) {
-  return (
-    <div className="rounded-2xl border border-[#e3ebe5] bg-[#fbfdfb] p-4">
-      <div className="flex items-center gap-2">
-        <Icon className="h-4 w-4 text-[#146c43]" />
-
-        <p className="text-[10px] font-bold uppercase tracking-[0.11em] text-[#718078]">
-          {label}
-        </p>
-      </div>
-
-      <p className="mt-2 text-xl font-bold text-[#13271d]">
-        {value}
-      </p>
-
-      <p className="mt-1 text-[11px] leading-5 text-[#718078]">
-        {explanation}
-      </p>
-    </div>
-  );
-}
-
-
 export default function WeatherPage() {
-  const navigate =
-    useNavigate();
+  const navigate = useNavigate();
 
   const {
     weather,
     isLoadingWeather,
     weatherError,
     fetchWeather,
+    refreshWeather,
   } = useWeather();
 
-  const [
-    savedFarm,
-    setSavedFarm,
-  ] = useState<SavedFarm | null>(
-    null
-  );
+  const [farm, setFarm] =
+    useState<SavedFarm | null>(null);
 
-  const [
-    aiProfile,
-    setAiProfile,
-  ] = useState<FarmProfileStore | null>(
-    null
-  );
+  const [language, setLanguage] =
+    useState<Language>("ta");
 
-  const [
-    locationError,
-    setLocationError,
-  ] = useState("");
+  const [locationError, setLocationError] =
+    useState("");
 
   useEffect(() => {
-    setSavedFarm(
-      readSavedFarm()
-    );
-
-    setAiProfile(
-      readAiProfile()
-    );
+    setFarm(readSavedFarm());
   }, []);
 
-
   const latitude =
-    savedFarm?.location?.latitude;
+    farm?.location?.latitude;
 
   const longitude =
-    savedFarm?.location?.longitude;
-
+    farm?.location?.longitude;
 
   const farmName =
-    savedFarm
-      ?.farm_profile
-      ?.farm_name ||
-    aiProfile
-      ?.profile
-      ?.farm_summary
-      ?.farm_name ||
+    farm?.farm_profile?.farm_name ||
     "Your registered farm";
 
-
   const variety =
-    savedFarm
-      ?.farm_profile
-      ?.banana_variety ||
-    aiProfile
-      ?.profile
-      ?.farm_summary
-      ?.variety ||
+    farm?.farm_profile?.banana_variety ||
     "Banana farm";
 
-
   const village =
-    savedFarm
-      ?.parcel_metadata
-      ?.village;
+    farm?.parcel_metadata?.village;
 
   const district =
-    savedFarm
-      ?.parcel_metadata
-      ?.district;
+    farm?.parcel_metadata?.district;
 
+  const locationText = [
+    village,
+    district,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   const loadWeather =
     useCallback(
-      async () => {
+      async (
+        forceRefresh = false
+      ) => {
         setLocationError("");
 
         if (
@@ -440,31 +401,36 @@ export default function WeatherPage() {
           !Number.isFinite(longitude)
         ) {
           setLocationError(
-            "Your registered farm location could not be found. Please confirm the farm location first."
+            "Registered farm coordinates are not available."
           );
 
           return;
         }
 
-        await fetchWeather(
-          latitude,
-          longitude
-        );
+        if (forceRefresh) {
+          await refreshWeather(
+            latitude,
+            longitude
+          );
+        } else {
+          await fetchWeather(
+            latitude,
+            longitude
+          );
+        }
       },
       [
         latitude,
         longitude,
         fetchWeather,
+        refreshWeather,
       ]
     );
-
 
   useEffect(() => {
     if (
       typeof latitude === "number" &&
-      typeof longitude === "number" &&
-      Number.isFinite(latitude) &&
-      Number.isFinite(longitude)
+      typeof longitude === "number"
     ) {
       void loadWeather();
     }
@@ -474,20 +440,16 @@ export default function WeatherPage() {
     loadWeather,
   ]);
 
+  const intelligence =
+    useMemo(() => {
+      if (!weather) {
+        return null;
+      }
 
-  const watch =
-    useMemo(
-      () =>
-        getWeatherWatch(
-          weather
-        ),
-      [weather]
-    );
-
-
-  const WatchIcon =
-    watch.Icon;
-
+      return getWeatherIntelligence(
+        weather
+      );
+    }, [weather]);
 
   const currentDirection =
     weather
@@ -497,30 +459,87 @@ export default function WeatherPage() {
         )
       : "—";
 
-
   const peakGustTime =
-    weather
-      ?.next_24_hours
-      ?.peak_gust_time
-      ? formatWeatherTime(
+    weather?.next_24_hours
+      .peak_gust_time
+      ? formatTime(
           weather.next_24_hours
             .peak_gust_time,
-          weather.location
-            .timezone
+          weather.location.timezone
         )
-      : "No peak identified";
+      : "—";
 
+  const displayError =
+    locationError ||
+    weatherError;
 
-  const locationText = [
-    village,
-    district,
-  ]
-    .filter(Boolean)
-    .join(", ");
-
+  const text =
+    language === "ta"
+      ? {
+          back: "பின்செல்",
+          title: "வானிலை நுண்ணறிவு",
+          live: "நேரடி வானிலை",
+          refresh: "வானிலையை புதுப்பிக்கவும்",
+          updating: "புதுப்பிக்கிறது...",
+          current: "தற்போதைய வானிலை",
+          next24: "அடுத்த 24 மணி நேரம்",
+          temperature: "வெப்பநிலை",
+          rain: "மழை",
+          wind: "காற்றின் வேகம்",
+          gust: "காற்று வேகம்",
+          rainProbability:
+            "மழை வாய்ப்பு",
+          rainfall:
+            "எதிர்பார்க்கப்படும் மழைப்பொழிவு",
+          maxWind:
+            "அதிகபட்ச காற்று",
+          maxGust:
+            "அதிகபட்ச காற்று அலை",
+          actions:
+            "விவசாயி செய்ய வேண்டியவை",
+          system:
+            "செயலாக்க நிலை",
+          connected:
+            "இணைக்கப்பட்டுள்ளது",
+          processed:
+            "தரவு செயலாக்கப்பட்டது",
+          backend:
+            "Backend வானிலை தரவு",
+        }
+      : {
+          back: "Back",
+          title: "Farm Weather Intelligence",
+          live: "Live weather",
+          refresh: "Refresh weather",
+          updating: "Updating...",
+          current: "Current weather",
+          next24: "Next 24 hours",
+          temperature: "Temperature",
+          rain: "Rain now",
+          wind: "Wind speed",
+          gust: "Current gust",
+          rainProbability:
+            "Rain probability",
+          rainfall:
+            "Expected precipitation",
+          maxWind:
+            "Maximum wind",
+          maxGust:
+            "Maximum gust",
+          actions:
+            "Recommended farmer actions",
+          system:
+            "System status",
+          connected:
+            "Connected",
+          processed:
+            "Data processed",
+          backend:
+            "Backend weather data",
+        };
 
   return (
-    <div className="min-h-screen bg-[#f5faf6]">
+    <div className="min-h-screen bg-[#f4f9f5]">
       <main className="mx-auto max-w-[1500px] px-4 py-5 sm:px-6 lg:px-8">
 
         {/* TOP BAR */}
@@ -534,70 +553,101 @@ export default function WeatherPage() {
               className="h-10 rounded-xl border-[#dfe9e2] bg-white"
             >
               <ArrowLeft className="mr-2 h-4 w-4" />
-              Back
+              {text.back}
             </Button>
 
             <div>
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#146c43]">
+              <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]">
                 VazhaiGuard AI
               </p>
 
               <h1 className="text-xl font-bold text-[#13271d] sm:text-2xl">
-                Farm Weather Intelligence
+                {text.title}
               </h1>
             </div>
           </div>
 
-          <Button
-            onClick={() =>
-              void loadWeather()
-            }
-            disabled={
-              isLoadingWeather
-            }
-            variant="outline"
-            className="h-10 rounded-xl border-[#cfe0d4] bg-white text-[#146c43]"
-          >
-            {isLoadingWeather ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <RefreshCw className="mr-2 h-4 w-4" />
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex rounded-xl border border-[#dfe9e2] bg-white p-1">
+              <button
+                onClick={() =>
+                  setLanguage("ta")
+                }
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                  language === "ta"
+                    ? "bg-[#073b2a] text-white"
+                    : "text-[#718078]"
+                }`}
+              >
+                தமிழ்
+              </button>
+
+              <button
+                onClick={() =>
+                  setLanguage("en")
+                }
+                className={`rounded-lg px-3 py-1.5 text-xs font-bold ${
+                  language === "en"
+                    ? "bg-[#073b2a] text-white"
+                    : "text-[#718078]"
+                }`}
+              >
+                English
+              </button>
+            </div>
+
+            {weather && (
+              <div className="flex items-center gap-2 rounded-xl border border-[#dfe9e2] bg-white px-3 py-2 text-xs text-[#637269]">
+                <span className="h-2 w-2 rounded-full bg-green-500" />
+                {text.live}
+              </div>
             )}
 
-            {isLoadingWeather
-              ? "Updating..."
-              : "Refresh weather"}
-          </Button>
+            <Button
+              onClick={() =>
+                void loadWeather(true)
+              }
+              disabled={isLoadingWeather}
+              variant="outline"
+              className="h-10 rounded-xl border-[#cfe0d4] bg-white text-[#146c43]"
+            >
+              {isLoadingWeather ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="mr-2 h-4 w-4" />
+              )}
+
+              {isLoadingWeather
+                ? text.updating
+                : text.refresh}
+            </Button>
+          </div>
         </div>
 
-
         {/* HERO */}
-        <section className="overflow-hidden rounded-[30px] bg-[#073b2a] shadow-[0_25px_80px_rgba(7,59,42,0.18)]">
+        <section className="overflow-hidden rounded-[32px] bg-[#073b2a] shadow-[0_25px_80px_rgba(7,59,42,0.18)]">
           <div className="relative p-6 sm:p-8 lg:p-10">
-
-            <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-[#b8df4b]/10 blur-3xl" />
-
-            <div className="relative z-10 grid gap-8 lg:grid-cols-[1.2fr_0.8fr]">
+            <div className="grid gap-8 lg:grid-cols-[1.25fr_0.75fr]">
 
               <div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.07] px-3 py-1.5">
-                  <span className="h-2 w-2 rounded-full bg-[#b8df4b]" />
+                  <span className="h-2 w-2 animate-pulse rounded-full bg-[#b8df4b]" />
 
                   <span className="text-[10px] font-bold uppercase tracking-[0.14em] text-white/70">
-                    Live farm weather
+                    {text.live}
                   </span>
                 </div>
 
                 <h2 className="mt-5 max-w-3xl text-3xl font-bold leading-tight text-white sm:text-4xl lg:text-5xl">
-                  Weather your farm can
-                  <span className="block text-[#b8df4b]">
-                    understand at a glance.
-                  </span>
+                  {language === "ta"
+                    ? "உங்கள் வயலுக்கு புரியும் வானிலை."
+                    : "Weather your farm can understand."}
                 </h2>
 
                 <p className="mt-4 max-w-2xl text-sm leading-6 text-white/65 sm:text-base">
-                  VazhaiGuard reads weather around your registered farm and turns
-                  rain, wind and gust information into a simple farmer-facing watch.
+                  {language === "ta"
+                    ? "VazhaiGuard நேரடி வானிலை தரவை விவசாயிக்கு புரியும் எளிய தகவலாக மாற்றுகிறது."
+                    : "VazhaiGuard converts live weather data into simple farmer-facing information."}
                 </p>
 
                 <div className="mt-6 flex flex-wrap gap-2">
@@ -618,82 +668,83 @@ export default function WeatherPage() {
                 </div>
               </div>
 
+              {/* INTELLIGENCE STATUS */}
+              <div className="rounded-[28px] border border-white/10 bg-white/[0.07] p-6 backdrop-blur-xl">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/45">
+                  {language === "ta"
+                    ? "வானிலை நிலை"
+                    : "Weather status"}
+                </p>
 
-              {/* STATUS */}
-              <div className="rounded-[26px] border border-white/10 bg-white/[0.07] p-5 backdrop-blur-xl sm:p-6">
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-white/45">
-                      Farm weather watch
+                {intelligence ? (
+                  <>
+                    <h3 className="mt-3 text-2xl font-bold text-white">
+                      {language === "ta"
+                        ? intelligence.titleTa
+                        : intelligence.title}
+                    </h3>
+
+                    <p className="mt-3 text-sm leading-6 text-white/60">
+                      {language === "ta"
+                        ? intelligence.summaryTa
+                        : intelligence.summary}
                     </p>
 
-                    <p className="mt-2 text-xl font-bold text-white">
-                      {watch.label}
-                    </p>
-                  </div>
-
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#b8df4b]">
-                    <WatchIcon className="h-6 w-6 text-[#073b2a]" />
-                  </div>
-                </div>
-
-                <div className="mt-6">
-                  <p className="text-2xl font-bold text-white">
-                    {watch.title}
+                    <div className="mt-6 inline-flex items-center gap-2 rounded-full bg-[#b8df4b] px-3 py-1.5 text-xs font-bold text-[#073b2a]">
+                      <ShieldCheck className="h-4 w-4" />
+                      {riskLabel(
+                        intelligence.overallLevel,
+                        language
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <p className="mt-4 text-sm text-white/60">
+                    {language === "ta"
+                      ? "வானிலை தரவை ஏற்றுகிறது..."
+                      : "Loading weather intelligence..."}
                   </p>
-
-                  <p className="mt-2 text-sm leading-6 text-white/60">
-                    {watch.summary}
-                  </p>
-                </div>
-
-                <div className="mt-5 flex items-center gap-2 text-xs text-white/50">
-                  <ShieldCheck className="h-4 w-4 text-[#b8df4b]" />
-                  Weather signal based on your registered farm location.
-                </div>
+                )}
               </div>
-
             </div>
           </div>
         </section>
 
-
         {/* ERROR */}
-        {(weatherError ||
-          locationError) && (
-          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-[#efc4c0] bg-[#fff8f7] p-4 text-sm text-[#a83a34]">
+        {displayError && (
+          <div className="mt-5 flex items-start gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
 
             <div>
               <p className="font-bold">
-                Weather needs attention
+                {language === "ta"
+                  ? "வானிலை சேவையில் சிக்கல்"
+                  : "Weather service issue"}
               </p>
 
-              <p className="mt-1 leading-5">
-                {locationError ||
-                  weatherError}
+              <p className="mt-1">
+                {displayError}
               </p>
             </div>
           </div>
         )}
 
-
         {/* NO LOCATION */}
         {!latitude ||
         !longitude ? (
-          <section className="mt-6 rounded-[26px] border border-[#dfe9e2] bg-white p-7 text-center shadow-sm">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-[#eef7f0]">
-              <MapPin className="h-6 w-6 text-[#146c43]" />
-            </div>
+          <section className="mt-6 rounded-[28px] border border-[#dfe9e2] bg-white p-8 text-center shadow-sm">
+            <MapPin className="mx-auto h-10 w-10 text-[#146c43]" />
 
             <h3 className="mt-4 text-xl font-bold text-[#13271d]">
-              Your farm location is required
+              {language === "ta"
+                ? "முதலில் பண்ணை இருப்பிடத்தை உறுதிப்படுத்தவும்"
+                : "Farm location is required"}
             </h3>
 
             <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-[#718078]">
-              Confirm your registered farm boundary first. Once the location
-              is saved, VazhaiGuard can automatically load weather for that
-              farm instead of using your phone's current location.
+              {language === "ta"
+                ? "உங்கள் பண்ணையின் இருப்பிடம் சேமிக்கப்பட்ட பிறகு நேரடி வானிலையை பெற முடியும்."
+                : "Save your registered farm location before loading live weather."}
             </p>
 
             <Button
@@ -702,312 +753,342 @@ export default function WeatherPage() {
                   "/farm/location"
                 )
               }
-              className="mt-5 rounded-xl bg-[#073b2a] text-white hover:bg-[#0b4d36]"
+              className="mt-5 rounded-xl bg-[#073b2a] text-white"
             >
-              Confirm farm location
+              {language === "ta"
+                ? "பண்ணை இருப்பிடம்"
+                : "Confirm farm location"}
             </Button>
           </section>
         ) : null}
 
-
         {/* LOADING */}
         {isLoadingWeather &&
           !weather && (
-            <section className="mt-6 grid gap-4 md:grid-cols-3">
-              {[
-                1,
-                2,
-                3,
-              ].map((item) => (
-                <div
-                  key={item}
-                  className="h-40 animate-pulse rounded-[24px] bg-white shadow-sm"
-                />
-              ))}
-            </section>
+            <div className="mt-6 grid gap-4 md:grid-cols-3">
+              {[1, 2, 3].map(
+                (item) => (
+                  <div
+                    key={item}
+                    className="h-40 animate-pulse rounded-[24px] bg-white"
+                  />
+                )
+              )}
+            </div>
           )}
-
 
         {weather && (
           <>
-            {/* CURRENT CONDITIONS */}
+            {/* CURRENT WEATHER */}
             <section className="mt-6">
-              <div className="mb-4 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]">
-                    Right now
-                  </p>
-
-                  <h3 className="mt-1 text-2xl font-bold text-[#13271d]">
-                    Current farm conditions
-                  </h3>
-                </div>
-
-                <p className="hidden text-xs text-[#718078] sm:block">
-                  Updated{" "}
-                  {formatWeatherTime(
-                    weather.current.time,
-                    weather.location.timezone
-                  )}
+              <div className="mb-4">
+                <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]">
+                  {text.current}
                 </p>
+
+                <h3 className="mt-1 text-2xl font-bold text-[#13271d]">
+                  {farmName}
+                </h3>
               </div>
 
-
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
                 <MetricCard
-                  icon={CloudSun}
-                  label="Temperature"
+                  icon={ThermometerSun}
+                  label={text.temperature}
                   value={`${weather.current.temperature.toFixed(1)}°C`}
-                  helper="Air temperature near your registered farm."
+                  helper={
+                    language === "ta"
+                      ? "பண்ணை அருகிலுள்ள தற்போதைய வெப்பநிலை."
+                      : "Current air temperature near the farm."
+                  }
                 />
 
                 <MetricCard
                   icon={Droplets}
-                  label="Rain now"
+                  label={text.rain}
                   value={`${weather.current.rain.toFixed(1)} mm`}
-                  helper="Rain recorded for the current weather period."
+                  helper={
+                    language === "ta"
+                      ? "தற்போதைய மழைப்பொழிவு."
+                      : "Current rainfall."
+                  }
                 />
 
                 <MetricCard
                   icon={Wind}
-                  label="Wind speed"
+                  label={text.wind}
                   value={`${weather.current.wind_speed.toFixed(1)} km/h`}
-                  helper={`Wind from ${currentDirection} (${Math.round(
-                    weather.current.wind_direction
-                  )}°).`}
+                  helper={
+                    language === "ta"
+                      ? `${currentDirection} திசையில் காற்று.`
+                      : `Wind from ${currentDirection}.`
+                  }
                 />
 
                 <MetricCard
                   icon={Gauge}
-                  label="Current gust"
+                  label={text.gust}
                   value={`${weather.current.wind_gust.toFixed(1)} km/h`}
-                  helper="Recent maximum wind gust."
+                  helper={
+                    language === "ta"
+                      ? "தற்போதைய அதிகபட்ச காற்று வேகம்."
+                      : "Current wind gust."
+                  }
                 />
               </div>
             </section>
 
+            {/* INTELLIGENCE */}
+            {intelligence && (
+              <section className="mt-8">
+                <div className="mb-4 flex items-end justify-between gap-4">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]">
+                      AI farm intelligence
+                    </p>
 
-            {/* FARMER EXPLANATION */}
-            <section
-              className={`mt-6 rounded-[26px] border p-5 sm:p-6 ${watch.className}`}
-            >
-              <div className="flex flex-col gap-5 sm:flex-row sm:items-start">
-                <div
-                  className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${watch.iconClassName}`}
-                >
-                  <WatchIcon className="h-6 w-6" />
+                    <h3 className="mt-1 text-2xl font-bold text-[#13271d]">
+                      {language === "ta"
+                        ? "விவசாயிக்கு முக்கியமான தகவல்"
+                        : "What should the farmer know?"}
+                    </h3>
+                  </div>
                 </div>
 
-                <div className="max-w-4xl">
-                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] opacity-70">
-                    What this means for you
-                  </p>
-
-                  <h3 className="mt-1 text-xl font-bold text-[#13271d]">
-                    {watch.title}
-                  </h3>
-
-                  <p className="mt-2 text-sm leading-6 text-[#596a60]">
-                    {watch.summary}
-                  </p>
+                <div className="grid gap-4 lg:grid-cols-2">
+                  {intelligence.insights.map(
+                    (insight, index) => (
+                      <InsightCard
+                        key={`${insight.type}-${index}`}
+                        insight={insight}
+                        language={language}
+                      />
+                    )
+                  )}
                 </div>
-              </div>
-            </section>
+              </section>
+            )}
 
+            {/* 24 HOURS */}
+            <section className="mt-8 rounded-[30px] border border-[#dfe9e2] bg-white p-6 shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#eef7f0]">
+                  <CloudSun className="h-5 w-5 text-[#146c43]" />
+                </div>
 
-            {/* 24 HOUR */}
-            <section className="mt-6 rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-[0_15px_45px_rgba(7,59,42,0.05)] sm:p-7">
-
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]">
-                    Next 24 hours
+                  <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#146c43]">
+                    {text.next24}
                   </p>
 
-                  <h3 className="mt-1 text-2xl font-bold text-[#13271d]">
-                    What may happen around your farm
+                  <h3 className="text-xl font-bold text-[#13271d]">
+                    {language === "ta"
+                      ? "அடுத்த 24 மணி நேர முன்னறிவிப்பு"
+                      : "Forecast around your farm"}
                   </h3>
                 </div>
-
-                <p className="text-xs text-[#718078]">
-                  Short-range forecast summary
-                </p>
               </div>
 
-
-              <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-
-                <ForecastMetric
+              <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                <MetricCard
                   icon={CloudRain}
-                  label="Rain probability"
+                  label={text.rainProbability}
                   value={`${Math.round(
                     weather.next_24_hours
                       .max_rain_probability
                   )}%`}
-                  explanation="Highest chance of precipitation during the next 24 hours."
+                  helper={
+                    language === "ta"
+                      ? "அதிகபட்ச மழை வாய்ப்பு."
+                      : "Highest rain probability."
+                  }
                 />
 
-                <ForecastMetric
+                <MetricCard
                   icon={Droplets}
-                  label="Expected precipitation"
-                  value={`${weather.next_24_hours.total_precipitation.toFixed(
-                    1
-                  )} mm`}
-                  explanation="Combined precipitation expected over the next 24 hours."
+                  label={text.rainfall}
+                  value={`${weather.next_24_hours.total_precipitation.toFixed(1)} mm`}
+                  helper={
+                    language === "ta"
+                      ? "எதிர்பார்க்கப்படும் மழைப்பொழிவு."
+                      : "Expected precipitation."
+                  }
                 />
 
-                <ForecastMetric
+                <MetricCard
                   icon={Wind}
-                  label="Maximum wind"
-                  value={`${weather.next_24_hours.max_wind_speed.toFixed(
-                    1
-                  )} km/h`}
-                  explanation="Highest forecast wind speed during this period."
+                  label={text.maxWind}
+                  value={`${weather.next_24_hours.max_wind_speed.toFixed(1)} km/h`}
+                  helper={
+                    language === "ta"
+                      ? "அதிகபட்ச காற்றின் வேகம்."
+                      : "Maximum wind speed."
+                  }
                 />
 
-                <ForecastMetric
+                <MetricCard
                   icon={Gauge}
-                  label="Maximum gust"
-                  value={`${weather.next_24_hours.max_wind_gust.toFixed(
-                    1
-                  )} km/h`}
-                  explanation="Strongest forecast gust during this period."
+                  label={text.maxGust}
+                  value={`${weather.next_24_hours.max_wind_gust.toFixed(1)} km/h`}
+                  helper={
+                    language === "ta"
+                      ? "அதிகபட்ச காற்று அலை."
+                      : "Maximum wind gust."
+                  }
                 />
               </div>
 
-
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
                 <div className="rounded-2xl bg-[#073b2a] p-5 text-white">
                   <div className="flex items-center gap-2">
                     <Wind className="h-4 w-4 text-[#b8df4b]" />
 
-                    <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-white/55">
-                      Peak wind timing
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-white/60">
+                      {language === "ta"
+                        ? "அதிக காற்று நேரம்"
+                        : "Peak gust timing"}
                     </p>
                   </div>
 
-                  <p className="mt-2 text-lg font-bold">
+                  <p className="mt-3 text-2xl font-bold">
                     {peakGustTime}
                   </p>
 
-                  <p className="mt-1 text-xs leading-5 text-white/55">
-                    This is when the forecast currently expects the strongest gust.
+                  <p className="mt-2 text-xs text-white/55">
+                    {weather.next_24_hours.max_wind_gust.toFixed(
+                      1
+                    )}{" "}
+                    km/h
                   </p>
                 </div>
 
-
-                <div className="rounded-2xl border border-[#e0e9e3] bg-[#f8fbf8] p-5">
+                <div className="rounded-2xl border border-[#dfe9e2] bg-[#f8fbf8] p-5">
                   <div className="flex items-center gap-2">
                     <Leaf className="h-4 w-4 text-[#146c43]" />
 
-                    <p className="text-[10px] font-bold uppercase tracking-[0.13em] text-[#718078]">
-                      Farmer view
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#718078]">
+                      {text.actions}
                     </p>
                   </div>
 
-                  <p className="mt-2 text-sm font-bold text-[#13271d]">
-                    Watch rain and wind before field work.
+                  <p className="mt-3 text-lg font-bold text-[#13271d]">
+                    {language === "ta"
+                      ? "வானிலையை பார்த்து வயல் பணியை திட்டமிடுங்கள்."
+                      : "Plan field work using the weather signal."}
                   </p>
 
-                  <p className="mt-1 text-xs leading-5 text-[#718078]">
-                    VazhaiGuard will later combine this weather information
-                    with field condition, crop and zone-risk data.
+                  <p className="mt-2 text-xs leading-5 text-[#718078]">
+                    {language === "ta"
+                      ? "இந்த தகவல் விவசாய முடிவுகளுக்கு உதவும் விழிப்புணர்வு கருவியாகும்."
+                      : "This is a decision-support awareness signal, not a crop-damage prediction."}
                   </p>
                 </div>
-
               </div>
             </section>
 
-
-            {/* WHY THIS MATTERS */}
-            <section className="mt-6 grid gap-5 lg:grid-cols-[1fr_1fr]">
-
-              <div className="rounded-[26px] border border-[#dfe9e2] bg-white p-6 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef7f0]">
-                    <Sprout className="h-5 w-5 text-[#146c43]" />
-                  </div>
-
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#146c43]">
-                      Why VazhaiGuard shows this
-                    </p>
-
-                    <h3 className="mt-1 text-lg font-bold text-[#13271d]">
-                      From weather to farm awareness
-                    </h3>
-                  </div>
+            {/* PIPELINE */}
+            <section className="mt-8 rounded-[30px] bg-[#073b2a] p-6 text-white shadow-sm">
+              <div className="flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#b8df4b]">
+                  <CheckCircle2 className="h-5 w-5 text-[#073b2a]" />
                 </div>
 
-                <div className="mt-5 space-y-3 text-sm leading-6 text-[#5f7066]">
-                  <p>
-                    <strong className="text-[#13271d]">
-                      Rain
-                    </strong>{" "}
-                    helps you understand whether wetter conditions may develop.
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#b8df4b]">
+                    {text.system}
                   </p>
 
-                  <p>
-                    <strong className="text-[#13271d]">
-                      Wind
-                    </strong>{" "}
-                    helps you notice periods when stronger field conditions may occur.
-                  </p>
-
-                  <p>
-                    <strong className="text-[#13271d]">
-                      Gusts
-                    </strong>{" "}
-                    highlight short periods of stronger wind that deserve closer attention.
-                  </p>
+                  <h3 className="text-xl font-bold">
+                    {language === "ta"
+                      ? "VazhaiGuard செயலாக்க ஓட்டம்"
+                      : "VazhaiGuard processing flow"}
+                  </h3>
                 </div>
               </div>
 
+              <div className="mt-6 grid gap-3 md:grid-cols-4">
+                {[
+                  language === "ta"
+                    ? "📍 பண்ணை இருப்பிடம்"
+                    : "📍 Farm location",
 
-              <div className="rounded-[26px] border border-[#dfe9e2] bg-[#073b2a] p-6 text-white shadow-[0_15px_45px_rgba(7,59,42,0.12)]">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#b8df4b]">
-                    <CheckCircle2 className="h-5 w-5 text-[#073b2a]" />
-                  </div>
+                  language === "ta"
+                    ? "🌦️ Weather API"
+                    : "🌦️ Weather API",
 
-                  <div>
-                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#b8df4b]">
-                      Next intelligence layer
-                    </p>
+                  language === "ta"
+                    ? "🧠 Intelligence"
+                    : "🧠 Intelligence",
 
-                    <h3 className="mt-1 text-lg font-bold">
-                      Weather is now ready for risk analysis
-                    </h3>
-                  </div>
-                </div>
+                  language === "ta"
+                    ? "👨‍🌾 Farmer Action"
+                    : "👨‍🌾 Farmer Action",
+                ].map(
+                  (item, index) => (
+                    <div
+                      key={item}
+                      className="rounded-2xl bg-white/[0.07] p-4"
+                    >
+                      <p className="text-xs font-bold">
+                        {index + 1}. {item}
+                      </p>
 
-                <p className="mt-5 text-sm leading-6 text-white/65">
-                  This weather layer is the foundation for the next VazhaiGuard
-                  stage: combining weather with your registered farm boundary,
-                  crop information and field conditions to identify where attention
-                  may be needed.
-                </p>
-
-                <div className="mt-5 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-2 text-xs text-white/70">
-                  <ShieldCheck className="h-4 w-4 text-[#b8df4b]" />
-                  Farm location verified
-                </div>
+                      <p className="mt-2 text-[11px] text-[#b8df4b]">
+                        {text.connected}
+                      </p>
+                    </div>
+                  )
+                )}
               </div>
-
             </section>
 
+            {/* DATA SOURCE */}
+            <section className="mt-6 rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm">
+              <div className="flex flex-col gap-2 text-xs sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-center gap-2 text-[#637269]">
+                  <ShieldCheck className="h-4 w-4 text-[#146c43]" />
 
-            {/* DISCLAIMER */}
+                  <span>
+                    {text.backend}
+                  </span>
+                </div>
+
+                <div className="flex flex-wrap gap-4 text-[#849188]">
+                  <span>
+                    Lat:{" "}
+                    {weather.location.latitude.toFixed(
+                      4
+                    )}
+                  </span>
+
+                  <span>
+                    Lon:{" "}
+                    {weather.location.longitude.toFixed(
+                      4
+                    )}
+                  </span>
+
+                  <span>
+                    {weather.location.timezone}
+                  </span>
+
+                  <span>
+                    {formatTime(
+                      weather.current.time,
+                      weather.location.timezone
+                    )}
+                  </span>
+                </div>
+              </div>
+            </section>
+
             <p className="mx-auto mt-6 max-w-4xl text-center text-[11px] leading-5 text-[#849188]">
-              Weather Watch is currently a simple product-level interpretation
-              of forecast rain and wind values. It is not a validated banana
-              damage prediction model. The future VazhaiGuard risk engine will
-              combine weather with farm-specific and zone-specific information.
+              {language === "ta"
+                ? "VazhaiGuard வானிலை தரவை விவசாய முடிவுகளுக்கான விழிப்புணர்வு தகவலாக மாற்றுகிறது. இது சரிபார்க்கப்பட்ட பயிர் சேத முன்னறிவிப்பு மாதிரி அல்ல."
+                : "VazhaiGuard converts weather data into decision-support information for farmers. It is not a validated crop-damage prediction model."}
             </p>
           </>
         )}
-
       </main>
     </div>
   );

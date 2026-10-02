@@ -1,5 +1,4 @@
 import axios from "axios";
-
 import type { WeatherData } from "../types/weather";
 
 const API_BASE_URL = (
@@ -11,6 +10,10 @@ export async function getWeather(
   lat: number,
   lon: number
 ): Promise<WeatherData> {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) {
+    throw new Error("Invalid farm coordinates.");
+  }
+
   try {
     const response = await axios.get<WeatherData>(
       `${API_BASE_URL}/weather`,
@@ -22,6 +25,7 @@ export async function getWeather(
         headers: {
           Accept: "application/json",
         },
+        timeout: 10000,
       }
     );
 

@@ -24,6 +24,12 @@ import FarmHomePage
 import WeatherPage 
   from "./pages/WeatherPage";
 
+import RiskPage
+  from "./pages/RiskPage";
+
+import ActionPlanPage
+  from "./pages/ActionPlanPage";
+
 
 export default function App() {
 
@@ -83,6 +89,18 @@ export default function App() {
       path="weather"
       element={
       <WeatherPage />
+      }
+        />
+        <Route
+      path="risk"
+      element={
+      <RiskPage />
+      }
+        />
+        <Route
+      path="plan"
+      element={
+      <ActionPlanPage />
       }
         />
 
