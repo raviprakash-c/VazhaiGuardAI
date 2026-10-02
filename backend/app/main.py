@@ -18,6 +18,7 @@ from voice_registration import (
 from agents.orchestrator import (
     router as orchestrator_router,
 )
+from weather import router as weather_router
 
 
 # ============================================================
@@ -191,6 +192,9 @@ app.include_router(
     farm_map_router
 )
 
+app.include_router(
+    weather_router
+)
 
 # ============================================================
 # ROOT

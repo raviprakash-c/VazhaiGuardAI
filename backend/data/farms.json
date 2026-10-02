@@ -2360,5 +2360,81 @@
       "confidence": 0.85,
       "source_file": "Park_Cadastral_Map.geojson"
     }
+  },
+  {
+    "farm_id": "farm_364ca04973",
+    "farm_profile": {
+      "farm_name": "Thagaraj Thottam",
+      "total_farm_acres": 6,
+      "banana_area_acres": 5,
+      "banana_variety": "Poovan",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "good",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.766498414251728,
+      "longitude": 78.02910668542609,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.02894560620189,
+            8.76710521624672
+          ],
+          [
+            78.02955027669668,
+            8.766907560683208
+          ],
+          [
+            78.02953803911805,
+            8.766856365721296
+          ],
+          [
+            78.0293663777411,
+            8.766208061272764
+          ],
+          [
+            78.02914978936315,
+            8.765313555015581
+          ],
+          [
+            78.02867889404297,
+            8.765313555015581
+          ],
+          [
+            78.02867889404297,
+            8.76717778381196
+          ],
+          [
+            78.02894560620189,
+            8.76710521624672
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 3.5809,
+    "perimeter_m": 542.07,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:9:8:8:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Allikulam",
+      "survey_number": "8",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "9",
+      "block_id": "8",
+      "kide": null,
+      "confidence": 0.85,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
   }
 ]
