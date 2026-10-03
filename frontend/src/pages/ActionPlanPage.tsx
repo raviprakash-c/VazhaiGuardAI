@@ -44,6 +44,11 @@ export default function ActionPlanPage() {
   }, [weather]);
 
   const decision = plan?.decision;
+  const weatherData = weather?.next_24_hours ?? {
+    max_rain_probability: 0,
+    total_precipitation: 0,
+    max_wind_gust: 0,
+  };
 
   const toggleAction = (action: FarmerActionItem) => {
     setCompleted((current) => ({
@@ -156,15 +161,15 @@ export default function ActionPlanPage() {
             <section className="grid gap-4 sm:grid-cols-3">
               <div className="rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Rain chance</p>
-                <p className="mt-1 text-2xl font-bold text-[#13271d]">{Math.round(weather.next_24_hours.max_rain_probability)}%</p>
+                <p className="mt-1 text-2xl font-bold text-[#13271d]">{Math.round(weatherData.max_rain_probability)}%</p>
               </div>
               <div className="rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Expected rain</p>
-                <p className="mt-1 text-2xl font-bold text-[#13271d]">{weather.next_24_hours.total_precipitation.toFixed(1)} mm</p>
+                <p className="mt-1 text-2xl font-bold text-[#13271d]">{weatherData.total_precipitation.toFixed(1)} mm</p>
               </div>
               <div className="rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Peak gust</p>
-                <p className="mt-1 text-2xl font-bold text-[#13271d]">{weather.next_24_hours.max_wind_gust.toFixed(0)} km/h</p>
+                <p className="mt-1 text-2xl font-bold text-[#13271d]">{weatherData.max_wind_gust.toFixed(0)} km/h</p>
               </div>
             </section>
 
