@@ -7,8 +7,21 @@ interface ChatMessageProps {
   isSpeaking?: boolean;
 }
 
+/**
+ * Bedrock/model responses can occasionally contain HTML entities such as
+ * `&#xBA4;` instead of the actual Tamil character. React renders strings as
+ * text, so those entities would otherwise appear literally in the chat.
+ */
+function decodeHtmlEntities(text: string): string {
+  if (!text || typeof document === "undefined") return text;
+
+  const textarea = document.createElement("textarea");
+  textarea.innerHTML = text;
+  return textarea.value;
+}
+
 function cleanInline(text: string): string {
-  return text
+  return decodeHtmlEntities(text)
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, "$1")
     .replace(/https?:\/\/\S+/g, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -19,7 +32,7 @@ function cleanInline(text: string): string {
 }
 
 function renderText(text: string) {
-  const lines = text.replace(/\r/g, "").split("\n");
+  const lines = decodeHtmlEntities(text).replace(/\r/g, "").split("\n");
 
   return (
     <div className="space-y-2">
@@ -46,7 +59,9 @@ function renderText(text: string) {
         if (numbered) {
           return (
             <div key={index} className="flex gap-2">
-              <span className="font-semibold opacity-80">{trimmed.slice(0, trimmed.indexOf(content))}</span>
+              <span className="font-semibold opacity-80">
+                {trimmed.slice(0, trimmed.indexOf(content))}
+              </span>
               <span>{content}</span>
             </div>
           );
