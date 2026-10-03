@@ -52,6 +52,7 @@ export default function CopilotPage() {
     isSpeaking,
     liveTranscript,
     voiceError,
+    tamilVoiceAvailable,
     speak,
     startListening,
     stopListening,
@@ -145,20 +146,14 @@ export default function CopilotPage() {
         window.setTimeout(() => {
           const speechQueued = speak(answer, language);
 
-          // If the device has no Tamil TTS voice (or speech synthesis is
-          // unavailable), do not leave hands-free mode stuck on "Speaking".
-          // The answer remains visible and the microphone can move to the
-          // next farmer turn after a short pause.
+          // If the device has no Tamil voice, speak() returns false and the
+          // conversation immediately moves to the next farmer turn.
           if (!speechQueued) {
             speechStartedRef.current = false;
-            if (handsFree) {
-              window.setTimeout(() => {
-                autoListenPendingRef.current = false;
-                if (handsFree && autoSpeak && !isProcessing) beginListening();
-                else setStage("ready");
-              }, 650);
+            autoListenPendingRef.current = false;
+            if (handsFree && autoSpeak) {
+              window.setTimeout(() => beginListening(), 650);
             } else {
-              autoListenPendingRef.current = false;
               setStage("ready");
             }
           }
@@ -192,10 +187,26 @@ export default function CopilotPage() {
   useEffect(() => {
     if (!autoListenPendingRef.current) return;
 
+    // Normal path: wait for the browser speech engine to finish before
+    // reopening the microphone.
     if (isSpeaking) {
       speechStartedRef.current = true;
       setStage("speaking");
       return;
+    }
+
+    // If speech was blocked after being queued, voiceError changes and this
+    // branch prevents the UI from getting stuck on "Speaking" forever.
+    if (voiceError && !isSpeaking && !isProcessing && !isListening) {
+      autoListenPendingRef.current = false;
+      speechStartedRef.current = false;
+
+      const timer = window.setTimeout(() => {
+        if (handsFree && autoSpeak) beginListening();
+        else setStage("ready");
+      }, 900);
+
+      return () => window.clearTimeout(timer);
     }
 
     if (!speechStartedRef.current || isProcessing || isListening) return;
@@ -209,7 +220,7 @@ export default function CopilotPage() {
     }, 350);
 
     return () => window.clearTimeout(timer);
-  }, [isSpeaking, isProcessing, isListening, handsFree, autoSpeak]);
+  }, [isSpeaking, voiceError, isProcessing, isListening, handsFree, autoSpeak]);
 
   useEffect(() => {
     if (isListening) setStage("listening");
@@ -452,6 +463,19 @@ export default function CopilotPage() {
               <p className="text-[10px] text-white/55">{languageName} • VazhaiGuard AI</p>
             </div>
           </div>
+
+          {language === "ta-IN" && (
+            <div className={`mt-4 rounded-2xl border p-3 ${tamilVoiceAvailable ? "border-[#b8df4b]/40 bg-[#b8df4b]/10" : "border-amber-200/30 bg-amber-300/10"}`}>
+              <p className="text-xs font-bold">
+                {tamilVoiceAvailable ? "🔊 Tamil voice ready" : "🔇 Tamil voice not installed"}
+              </p>
+              <p className="mt-1 text-[10px] leading-5 text-white/70">
+                {tamilVoiceAvailable
+                  ? "Tamil answers can be spoken automatically on this device."
+                  : "The AI answer still appears correctly. Install a Tamil speech voice in Windows to hear the full answer."}
+              </p>
+            </div>
+          )}
 
           <div className="mt-5 space-y-3">
             <div className={`rounded-2xl p-3 ${stage === "listening" ? "bg-[#b8df4b] text-[#073b2a]" : "bg-white/[0.07]"}`}>
