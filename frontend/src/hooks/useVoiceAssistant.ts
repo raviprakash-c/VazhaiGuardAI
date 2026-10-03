@@ -5,9 +5,7 @@ import {
   useState,
 } from "react";
 
-import type {
-  VoiceLanguage,
-} from "../types/voice";
+import type { VoiceLanguage } from "../types/voice";
 
 type RecognitionAlternative = {
   transcript: string;
@@ -61,9 +59,16 @@ declare global {
 function decodeHtmlEntities(text: string): string {
   if (!text || typeof document === "undefined") return text;
 
-  const textarea = document.createElement("textarea");
-  textarea.innerHTML = text;
-  return textarea.value;
+  let decoded = text;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = decoded;
+    const next = textarea.value;
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  return decoded;
 }
 
 export function useVoiceAssistant() {
@@ -85,9 +90,12 @@ export function useVoiceAssistant() {
     }
 
     const voices = window.speechSynthesis.getVoices();
-    setTamilVoiceAvailable(
-      voices.some((voice) => voice.lang.toLowerCase().startsWith("ta")),
-    );
+    const hasTamil = voices.some((voice) => {
+      const lang = voice.lang.toLowerCase();
+      return lang === "ta-in" || lang.startsWith("ta-") || lang === "ta";
+    });
+
+    setTamilVoiceAvailable(hasTamil);
   }, []);
 
   useEffect(() => {
@@ -111,9 +119,8 @@ export function useVoiceAssistant() {
   }, []);
 
   /**
-   * Queue speech and report whether a real voice was queued.
-   * Returning false lets the Copilot continue its conversation state
-   * instead of getting stuck when a device has no Tamil TTS voice.
+   * Queue speech and return true only when a supported voice was selected.
+   * Tamil is never silently spoken with an English voice.
    */
   const speak = useCallback(
     (rawText: string, language: VoiceLanguage): boolean => {
@@ -133,21 +140,22 @@ export function useVoiceAssistant() {
 
       window.speechSynthesis.cancel();
 
+      // Some browsers populate the voice list asynchronously. Ask the browser
+      // to refresh it before reading the list again.
       const voices = window.speechSynthesis.getVoices();
       const languagePrefix = language.split("-")[0].toLowerCase();
       const exactVoice = voices.find(
         (voice) => voice.lang.toLowerCase() === language.toLowerCase(),
       );
       const sameLanguageVoice = voices.find((voice) =>
-        voice.lang.toLowerCase().startsWith(languagePrefix),
+        voice.lang.toLowerCase().startsWith(`${languagePrefix}-`),
       );
       const selectedVoice = exactVoice ?? sameLanguageVoice;
 
-      // Never silently speak Tamil using an English voice.
       if (language === "ta-IN" && !selectedVoice) {
         setTamilVoiceAvailable(false);
         setVoiceError(
-          "இந்த சாதனத்தில் தமிழ் குரல் கிடைக்கவில்லை. Tamil voice நிறுவிய பிறகு மீண்டும் முயற்சி செய்யுங்கள்.",
+          "இந்த சாதனத்தில் தமிழ் குரல் கிடைக்கவில்லை. Windows-ல் Tamil language speech pack-ஐ நிறுவி Chrome-ஐ மறுதொடக்கம் செய்யுங்கள்.",
         );
         return false;
       }
@@ -170,7 +178,7 @@ export function useVoiceAssistant() {
         if (event.error === "not-allowed") {
           setVoiceError(
             language === "ta-IN"
-              ? "Browser தானாக குரல் இயக்க அனுமதிக்கவில்லை. பதிலை மீண்டும் கேட்க Replay-ஐ அழுத்துங்கள்."
+              ? "Browser தானாக குரல் இயக்க அனுமதிக்கவில்லை. Replay-ஐ ஒருமுறை அழுத்தி அனுமதியுங்கள்."
               : "The browser blocked automatic audio. Use Replay once to allow speech.",
           );
           return;
@@ -183,7 +191,19 @@ export function useVoiceAssistant() {
         );
       };
 
-      window.speechSynthesis.speak(utterance);
+      try {
+        window.speechSynthesis.speak(utterance);
+      } catch (error) {
+        console.error("[Speech] queue error:", error);
+        setIsSpeaking(false);
+        setVoiceError(
+          language === "ta-IN"
+            ? "குரலை தொடங்க முடியவில்லை. Replay-ஐ முயற்சி செய்யுங்கள்."
+            : "Unable to start speech. Please try again.",
+        );
+        return false;
+      }
+
       return true;
     },
     [],
@@ -358,24 +378,9 @@ export function useVoiceAssistant() {
         // Ignore cleanup errors.
       }
     }
-
     recognitionRef.current = null;
-    hasSubmittedRef.current = true;
     setIsListening(false);
-  }, []);
-
-  const clearVoiceError = useCallback(() => setVoiceError(""), []);
-
-  useEffect(() => {
-    return () => {
-      try {
-        recognitionRef.current?.abort();
-      } catch {
-        // Ignore cleanup errors.
-      }
-
-      if ("speechSynthesis" in window) window.speechSynthesis.cancel();
-    };
+    setLiveTranscript("");
   }, []);
 
   return {
@@ -389,7 +394,6 @@ export function useVoiceAssistant() {
     stopListening,
     cancelListening,
     cancelSpeech,
-    clearVoiceError,
     setLiveTranscript,
   };
 }
