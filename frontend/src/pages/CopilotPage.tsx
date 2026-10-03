@@ -23,11 +23,7 @@ interface Message {
   text: string;
 }
 
-type ConversationStage =
-  | "ready"
-  | "listening"
-  | "thinking"
-  | "speaking";
+type ConversationStage = "ready" | "listening" | "thinking" | "speaking";
 
 const initialTamil =
   "வணக்கம்! நான் VazhaiGuard AI. உங்கள் தோட்டம், மழை, காற்று அல்லது பயிர் பற்றி கேளுங்கள்.";
@@ -143,12 +139,33 @@ export default function CopilotPage() {
       ]);
 
       setIsProcessing(false);
-      setStage(autoSpeak ? "speaking" : "ready");
 
       if (autoSpeak) {
-        window.setTimeout(() => speak(answer, language), 100);
+        setStage("speaking");
+        window.setTimeout(() => {
+          const speechQueued = speak(answer, language);
+
+          // If the device has no Tamil TTS voice (or speech synthesis is
+          // unavailable), do not leave hands-free mode stuck on "Speaking".
+          // The answer remains visible and the microphone can move to the
+          // next farmer turn after a short pause.
+          if (!speechQueued) {
+            speechStartedRef.current = false;
+            if (handsFree) {
+              window.setTimeout(() => {
+                autoListenPendingRef.current = false;
+                if (handsFree && autoSpeak && !isProcessing) beginListening();
+                else setStage("ready");
+              }, 650);
+            } else {
+              autoListenPendingRef.current = false;
+              setStage("ready");
+            }
+          }
+        }, 100);
       } else {
         autoListenPendingRef.current = false;
+        setStage("ready");
       }
     } catch (error) {
       console.error("[Copilot] request failed", error);
@@ -172,12 +189,6 @@ export default function CopilotPage() {
 
   submitRef.current = submit;
 
-  /*
-   * Synchronize the conversation with speech playback.
-   * We only reopen the microphone after speech has actually
-   * started and then finished. This prevents the microphone
-   * from hearing VazhaiGuard's own answer.
-   */
   useEffect(() => {
     if (!autoListenPendingRef.current) return;
 
@@ -193,11 +204,8 @@ export default function CopilotPage() {
     speechStartedRef.current = false;
 
     const timer = window.setTimeout(() => {
-      if (handsFree && autoSpeak && !isProcessing) {
-        beginListening();
-      } else {
-        setStage("ready");
-      }
+      if (handsFree && autoSpeak && !isProcessing) beginListening();
+      else setStage("ready");
     }, 350);
 
     return () => window.clearTimeout(timer);
