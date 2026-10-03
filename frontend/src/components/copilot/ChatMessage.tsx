@@ -8,16 +8,23 @@ interface ChatMessageProps {
 }
 
 /**
- * Bedrock/model responses can occasionally contain HTML entities such as
- * `&#xBA4;` instead of the actual Tamil character. React renders strings as
- * text, so those entities would otherwise appear literally in the chat.
+ * Model responses can occasionally be encoded more than once, for example
+ * `&amp;#xBA4;` instead of the Tamil character itself. Decode repeatedly so
+ * the farmer sees real Tamil Unicode rather than HTML entity text.
  */
 function decodeHtmlEntities(text: string): string {
   if (!text || typeof document === "undefined") return text;
 
-  const textarea = document.createElement("textarea");
-  textarea.innerHTML = text;
-  return textarea.value;
+  let decoded = text;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = decoded;
+    const next = textarea.value;
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  return decoded;
 }
 
 function cleanInline(text: string): string {
