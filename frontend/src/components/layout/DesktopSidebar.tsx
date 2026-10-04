@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Map,
   Mic,
+  ScanSearch,
   Settings,
   ShieldAlert,
   Sparkles,
@@ -22,6 +23,7 @@ const primaryNavigation = [
   { name: "Weather & Alerts", icon: CloudSun, path: "/weather", enabled: true },
   { name: "Risk Analysis", icon: ShieldAlert, path: "/risk", enabled: true },
   { name: "Storm Plan", icon: Sparkles, path: "/plan", enabled: true },
+  { name: "Crop Photo Check", tamilName: "பயிர் படம்", icon: ScanSearch, path: "/inspect", enabled: true, badge: "AI" },
   { name: "AI Copilot", tamilName: "குரல் உதவி", icon: Bot, path: "/copilot", enabled: true, badge: "AI" },
 ];
 
@@ -52,7 +54,7 @@ export default function DesktopSidebar() {
                   <>
                     {isActive && <div className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-[#b8df4b]" />}
                     <div className="flex min-w-0 items-center gap-3">
-                      <Icon className={`h-[19px] w-[19px] shrink-0 ${isActive ? "text-[#146c43]" : item.name === "Voice Registration" || item.name === "AI Copilot" ? "text-[#b8df4b]" : "text-white/60 group-hover:text-white"}`} strokeWidth={2} />
+                      <Icon className={`h-[19px] w-[19px] shrink-0 ${isActive ? "text-[#146c43]" : item.name === "Voice Registration" || item.name === "AI Copilot" || item.name === "Crop Photo Check" ? "text-[#b8df4b]" : "text-white/60 group-hover:text-white"}`} strokeWidth={2} />
                       <div className="min-w-0">
                         <span className="block truncate text-[14px] font-medium">{item.name}</span>
                         {item.tamilName && <span className={`mt-0.5 block text-[9px] ${isActive ? "text-[#146c43]/70" : "text-white/35"}`}>{item.tamilName}</span>}

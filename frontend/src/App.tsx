@@ -9,6 +9,7 @@ import WeatherPage from "./pages/WeatherPage";
 import RiskPage from "./pages/RiskPage";
 import ActionPlanPage from "./pages/ActionPlanPage";
 import CopilotPage from "./pages/CopilotPage";
+import CropInspectionPage from "./pages/CropInspectionPage";
 
 export default function App() {
   return (
@@ -24,6 +25,7 @@ export default function App() {
         <Route path="risk" element={<RiskPage />} />
         <Route path="plan" element={<ActionPlanPage />} />
         <Route path="copilot" element={<CopilotPage />} />
+        <Route path="inspect" element={<CropInspectionPage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
