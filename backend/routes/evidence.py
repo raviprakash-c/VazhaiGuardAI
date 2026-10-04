@@ -6,6 +6,7 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
 from services.evidence_state import build_evidence_state
+from services.unified_risk_engine import calculate_unified_risk
 
 
 router = APIRouter(prefix="/ai/evidence", tags=["evidence-monitor"])
@@ -17,6 +18,10 @@ class EvidenceStateRequest(BaseModel):
     satellite: dict[str, Any] | None = None
     farm_context: dict[str, Any] | None = None
     zone_id: str | None = Field(default=None, max_length=80)
+
+
+class UnifiedRiskRequest(EvidenceStateRequest):
+    pass
 
 
 @router.get("/health")
@@ -41,4 +46,22 @@ def evidence_state(request: EvidenceStateRequest) -> dict[str, Any]:
     return {
         "zone_id": request.zone_id,
         "evidence": state,
+    }
+
+
+@router.post("/unified-risk")
+def unified_risk(request: UnifiedRiskRequest) -> dict[str, Any]:
+    """Deterministically fuse photo, weather, satellite and farm context."""
+    result = calculate_unified_risk(
+        vision=request.vision,
+        weather=request.weather,
+        satellite=request.satellite,
+        farm_context=request.farm_context,
+    )
+
+    return {
+        "zone_id": request.zone_id,
+        "risk": result,
+        "decision_ready": True,
+        "decision_policy": "Use the risk result as structured input to the farmer decision agent.",
     }
