@@ -10,11 +10,11 @@ from .bedrock_service import get_bedrock_client, extract_json
 
 PRIMARY_VISION_MODEL = os.getenv(
     "VAZHAIGUARD_VISION_MODEL",
-    "amazon.nova-lite-v1:0",
+    "apac.amazon.nova-lite-v1:0",
 )
 SECONDARY_VISION_MODEL = os.getenv(
     "VAZHAIGUARD_VISION_FALLBACK_MODEL",
-    "amazon.nova-pro-v1:0",
+    "apac.amazon.nova-pro-v1:0",
 )
 
 
