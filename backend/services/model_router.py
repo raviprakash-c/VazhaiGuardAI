@@ -24,7 +24,13 @@ ROUTER_MODEL = os.getenv(
 
 MULTIMODAL_MODEL = os.getenv(
     "VAZHAIGUARD_MULTIMODAL_MODEL",
-    "amazon.nova-lite-v1:0",
+    "apac.amazon.nova-lite-v1:0",
+)
+
+
+MULTIMODAL_FALLBACK_MODEL = os.getenv(
+    "VAZHAIGUARD_MULTIMODAL_FALLBACK_MODEL",
+    "apac.amazon.nova-pro-v1:0",
 )
 
 
@@ -72,7 +78,7 @@ def route_request(
                 "so a multimodal model is required."
             ),
 
-            fallback_model=TEXT_MODEL,
+            fallback_model=MULTIMODAL_FALLBACK_MODEL,
         )
 
     # -----------------------------------------------------
