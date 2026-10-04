@@ -17,7 +17,20 @@ class AgentRequest(BaseModel):
         default_factory=dict
     )
 
+    # Backward-compatible image field used by the original agent route.
     image_base64: Optional[str] = None
+
+    # Preferred multimodal field. The browser sends a data URL so the
+    # orchestrator can pass the original image bytes to the vision model.
+    image_data_url: Optional[str] = Field(
+        default=None,
+        max_length=12_000_000,
+    )
+
+    # Evidence supplied by real tools/services. Missing evidence stays missing.
+    weather_context: Optional[Dict[str, Any]] = None
+    satellite_context: Optional[Dict[str, Any]] = None
+    farm_context: Optional[Dict[str, Any]] = None
 
 
 class RoutingDecision(BaseModel):
