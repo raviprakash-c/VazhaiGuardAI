@@ -4,44 +4,27 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 
-
-# ============================================================
-# ROUTERS
-# ============================================================
-
 from farm_map import router as farm_map_router
 from parcel import router as parcel_router
 from routes.zone import router as zone_router
 from routes.bedrock import router as bedrock_router
 from routes.multimodal import router as multimodal_router
 from routes.evidence import router as evidence_router
-from voice_registration import (
-    router as voice_registration_router,
-)
-from agents.orchestrator import (
-    router as orchestrator_router,
-)
+from routes.followup import router as followup_router
+from voice_registration import router as voice_registration_router
+from agents.orchestrator import router as orchestrator_router
 from weather import router as weather_router
 
 
-# ============================================================
-# APPLICATION
-# ============================================================
-
 app = FastAPI(
     title="VazhaiGuardAI",
-    version="2.3.0",
+    version="2.4.0",
     description=(
-        "AI-powered banana farm intelligence platform "
-        "with AWS Bedrock farmer copilot, multimodal crop inspection, "
-        "and temporal evidence monitoring"
+        "AI-powered banana farm intelligence platform with AWS Bedrock farmer copilot, "
+        "multimodal crop inspection, temporal evidence monitoring, unified risk fusion, "
+        "and an agentic farmer action follow-up loop"
     ),
 )
-
-
-# ============================================================
-# CORS
-# ============================================================
 
 app.add_middleware(
     CORSMiddleware,
@@ -51,16 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-# ============================================================
-# TAMIL VOICE AUDIO
-# ============================================================
-
-TAMIL_AUDIO_DIR = (
-    Path(__file__).resolve().parent.parent
-    / "generated_audio"
-)
-
+TAMIL_AUDIO_DIR = Path(__file__).resolve().parent.parent / "generated_audio"
 FIELD_AUDIO_FILES = {
     "farm_name": "farm_name.mp3",
     "total_farm_acres": "total_farm_acres.mp3",
@@ -76,42 +50,20 @@ FIELD_AUDIO_FILES = {
 
 @app.get("/voice/tamil-audio/{field}")
 async def get_tamil_audio(field: str):
-    """Return the Tamil audio prompt for a registration field."""
-
     if field not in FIELD_AUDIO_FILES:
-        raise HTTPException(
-            status_code=404,
-            detail="Unknown Tamil voice field: " + field,
-        )
-
+        raise HTTPException(status_code=404, detail="Unknown Tamil voice field: " + field)
     filename = FIELD_AUDIO_FILES[field]
     audio_path = TAMIL_AUDIO_DIR / filename
-
-    print("[TamilVoice] Requested field:", field)
-    print("[TamilVoice] Audio path:", audio_path)
-    print("[TamilVoice] File exists:", audio_path.exists())
-
     if not audio_path.exists():
-        raise HTTPException(
-            status_code=404,
-            detail="Tamil audio file not found: " + str(audio_path),
-        )
+        raise HTTPException(status_code=404, detail="Tamil audio file not found: " + str(audio_path))
+    return FileResponse(path=str(audio_path), media_type="audio/mpeg", filename=filename)
 
-    return FileResponse(
-        path=str(audio_path),
-        media_type="audio/mpeg",
-        filename=filename,
-    )
-
-
-# ============================================================
-# ROUTER REGISTRATION
-# ============================================================
 
 app.include_router(voice_registration_router)
 app.include_router(parcel_router)
 app.include_router(zone_router)
 app.include_router(orchestrator_router)
+app.include_router(followup_router)
 app.include_router(farm_map_router)
 app.include_router(weather_router)
 app.include_router(bedrock_router)
@@ -119,16 +71,12 @@ app.include_router(multimodal_router)
 app.include_router(evidence_router)
 
 
-# ============================================================
-# ROOT / HEALTH
-# ============================================================
-
 @app.get("/")
 def root():
     return {
         "status": "online",
         "service": "VazhaiGuardAI",
-        "version": "2.3.0",
+        "version": "2.4.0",
         "capabilities": [
             "farmer-voice-copilot",
             "weather-decision-engine",
@@ -136,6 +84,7 @@ def root():
             "risk-fusion",
             "temporal-evidence-monitor",
             "satellite-freshness-and-conflict-detection",
+            "agentic-action-follow-up",
         ],
     }
 
@@ -148,4 +97,5 @@ def health():
         "bedrock_text_model": "mistral.ministral-3-8b-instruct",
         "multimodal": "enabled",
         "evidence_monitor": "enabled",
+        "agentic_follow_up": "enabled",
     }

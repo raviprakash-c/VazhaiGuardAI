@@ -7,6 +7,20 @@ export interface CopilotRequest {
   context: Record<string, unknown>;
 }
 
+export interface CopilotLoopState {
+  state: string;
+  action_id: string | null;
+  primary_action: Record<string, unknown>;
+  follow_up_check?: string | null;
+  recheck_after?: string | null;
+  needs_field_verification?: boolean;
+  risk?: {
+    score?: number | null;
+    level?: string | null;
+    signals_used?: string[];
+  };
+}
+
 export interface CopilotResponse {
   success: boolean;
   farm_id?: string | null;
@@ -25,4 +39,5 @@ export interface CopilotResponse {
     issues: string[];
   };
   trace: Array<Record<string, unknown>>;
+  loop: CopilotLoopState;
 }
