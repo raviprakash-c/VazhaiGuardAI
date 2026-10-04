@@ -7,6 +7,7 @@ import FarmLocationPage from "./pages/FarmLocationPage";
 import FarmHomePage from "./pages/FarmHomePage";
 import WeatherPage from "./pages/WeatherPage";
 import RiskPage from "./pages/RiskPage";
+import FarmRiskMapPage from "./pages/FarmRiskMapPage";
 import ActionPlanPage from "./pages/ActionPlanPage";
 import CopilotPage from "./pages/CopilotPage";
 import CropInspectionPage from "./pages/CropInspectionPage";
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="farm/home" element={<FarmHomePage />} />
         <Route path="weather" element={<WeatherPage />} />
         <Route path="risk" element={<RiskPage />} />
+        <Route path="risk-map" element={<FarmRiskMapPage />} />
         <Route path="plan" element={<ActionPlanPage />} />
         <Route path="copilot" element={<CopilotPage />} />
         <Route path="inspect" element={<CropInspectionPage />} />
