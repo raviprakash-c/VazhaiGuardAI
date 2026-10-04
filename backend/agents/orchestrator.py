@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import re
 import time
 from typing import Any, Dict
@@ -14,6 +15,8 @@ from schemas.agent import (
 
 from services.bedrock_service import generate_text
 from services.model_router import route_request
+from services.multimodal_service import analyze_crop_image, decode_data_url
+from routes.multimodal import _fuse_signals, _generate_farmer_decision
 
 
 router = APIRouter(
@@ -41,7 +44,7 @@ LANGUAGE:
 {request.language}
 
 FARM CONTEXT:
-{request.context}
+{request.farm_context or request.context}
 
 FARMER REQUEST:
 {request.user_query}
@@ -72,17 +75,11 @@ def normalize_farmer_response(response_text: str) -> str:
     """Remove presentation artifacts before text is shown or spoken."""
     text = response_text.strip()
 
-    # Remove fenced code markers and common Markdown emphasis.
     text = re.sub(r"```(?:[a-zA-Z0-9_-]+)?", "", text)
     text = text.replace("**", "").replace("__", "")
     text = re.sub(r"^\s*#{1,6}\s*", "", text, flags=re.MULTILINE)
-
-    # Preserve the human-readable label from Markdown links, but never expose
-    # the URL to a farmer unless the farmer explicitly requested a source.
     text = re.sub(r"\[([^\]]+)\]\(https?://[^)]+\)", r"\1", text)
     text = re.sub(r"https?://\S+", "", text)
-
-    # Convert common bullet prefixes to simple sentences.
     text = re.sub(r"^\s*[-*•]\s+", "", text, flags=re.MULTILINE)
     text = re.sub(r"\n{3,}", "\n\n", text)
     text = re.sub(r"[ \t]{2,}", " ", text)
@@ -96,9 +93,7 @@ def verify_agent_response(
     issues = []
 
     if not response_text.strip():
-        issues.append(
-            "Model returned an empty response."
-        )
+        issues.append("Model returned an empty response.")
 
     risky_phrases = [
         "guaranteed compensation",
@@ -112,9 +107,7 @@ def verify_agent_response(
 
     for phrase in risky_phrases:
         if phrase in lowered:
-            issues.append(
-                f"Potential unsupported claim: {phrase}"
-            )
+            issues.append(f"Potential unsupported claim: {phrase}")
 
     if issues:
         return {
@@ -128,14 +121,107 @@ def verify_agent_response(
     }
 
 
+def _image_data_url(request: AgentRequest) -> str | None:
+    """Resolve the preferred data URL while preserving the old base64 field."""
+    if request.image_data_url:
+        return request.image_data_url
+
+    if request.image_base64:
+        value = request.image_base64.strip()
+        if value.startswith("data:"):
+            return value
+        return "data:image/jpeg;base64," + value
+
+    return None
+
+
+def _run_multimodal_evidence_loop(
+    request: AgentRequest,
+    trace: list[dict[str, Any]],
+) -> str:
+    """Run OBSERVE -> FUSE -> DECIDE for an image-bearing agent request."""
+    data_url = _image_data_url(request)
+    if not data_url:
+        raise ValueError("Image evidence was requested but no image was supplied.")
+
+    image_bytes, content_type = decode_data_url(data_url)
+
+    vision = analyze_crop_image(
+        image_bytes=image_bytes,
+        content_type=content_type,
+        language=request.language,
+        farm_context=request.farm_context or request.context,
+        weather_context=request.weather_context,
+    )
+
+    trace.append({
+        "step": "observe",
+        "status": "completed",
+        "agent": "vision-inspector",
+        "model": vision.get("model"),
+        "fallback_used": vision.get("fallback_used", False),
+        "visual_confidence": vision.get("visual_confidence"),
+    })
+
+    weather = request.weather_context
+    satellite = request.satellite_context
+    score, label, signal_scores, signals_used, weights_used = _fuse_signals(
+        vision,
+        weather,
+        satellite,
+    )
+
+    trace.append({
+        "step": "evidence_fusion",
+        "status": "completed",
+        "risk_score": score,
+        "risk_level": label,
+        "signal_scores": signal_scores,
+        "signals_used": signals_used,
+        "weights_used": weights_used,
+    })
+
+    decision = _generate_farmer_decision(
+        vision=vision,
+        weather=weather,
+        satellite=satellite,
+        farm_context=request.farm_context or request.context,
+        score=score,
+        label=label,
+        language=request.language,
+    )
+
+    trace.append({
+        "step": "decide",
+        "status": "completed",
+        "agent": "farmer-decision-agent",
+        "decision_model": "mistral.ministral-3-8b-instruct",
+        "risk_level": label,
+    })
+
+    request.context["multimodal_result"] = {
+        "vision": vision,
+        "risk": {
+            "score": score,
+            "level": label,
+            "signals_used": signals_used,
+            "weights_used": weights_used,
+        },
+        "signal_scores": signal_scores,
+        "decision": decision,
+    }
+
+    return normalize_farmer_response(
+        str(decision.get("farmer_message", decision.get("summary", "")))
+    )
+
+
 def run_orchestrator(
     request: AgentRequest,
 ) -> Dict[str, Any]:
     started_at = time.perf_counter()
 
-    has_image = bool(
-        request.image_base64
-    )
+    has_image = bool(_image_data_url(request))
 
     # -----------------------------------------------------
     # 1. ROUTER
@@ -157,97 +243,117 @@ def run_orchestrator(
     ]
 
     # -----------------------------------------------------
-    # 2. PLANNER
+    # 2. MULTIMODAL AGENT PATH
     # -----------------------------------------------------
-    prompt = build_prompt(
-        request=request,
-        task_type=route.task_type,
-    )
-
-    trace.append(
-        {
-            "step": "planner",
-            "status": "completed",
-            "action": (
-                "Prepared task-specific farmer prompt "
-                "from the request and available farm context."
-            ),
-        }
-    )
-
-    # -----------------------------------------------------
-    # 3. PRIMARY MODEL EXECUTION
-    # -----------------------------------------------------
-    try:
-        response_text = generate_text(
-            prompt=prompt,
-            model_id=route.model_id,
-            max_tokens=400,
-            temperature=0.2,
-        )
-
-        trace.append(
-            {
-                "step": "model",
+    if has_image:
+        try:
+            response_text = _run_multimodal_evidence_loop(
+                request,
+                trace,
+            )
+            trace.append({
+                "step": "act",
                 "status": "completed",
-                "model": route.selected_model,
-                "model_id": route.model_id,
-            }
-        )
-
-    except Exception as primary_error:
-        trace.append(
-            {
-                "step": "model",
+                "action": "Prepared farmer-facing action from fused evidence.",
+            })
+        except Exception as multimodal_error:
+            trace.append({
+                "step": "multimodal",
                 "status": "failed",
-                "model": route.selected_model,
-                "model_id": route.model_id,
-                "error": str(primary_error),
-            }
-        )
-
-        # -------------------------------------------------
-        # 4. FALLBACK MODEL
-        # -------------------------------------------------
-        if not route.fallback_model:
+                "error": str(multimodal_error),
+            })
             raise
 
+    else:
+        # -------------------------------------------------
+        # 3. TEXT PLANNER
+        # -------------------------------------------------
+        prompt = build_prompt(
+            request=request,
+            task_type=route.task_type,
+        )
+
+        trace.append(
+            {
+                "step": "planner",
+                "status": "completed",
+                "action": (
+                    "Prepared task-specific farmer prompt "
+                    "from the request and available farm context."
+                ),
+            }
+        )
+
+        # -------------------------------------------------
+        # 4. PRIMARY MODEL EXECUTION
+        # -------------------------------------------------
         try:
             response_text = generate_text(
                 prompt=prompt,
-                model_id=route.fallback_model,
+                model_id=route.model_id,
                 max_tokens=400,
                 temperature=0.2,
             )
 
             trace.append(
                 {
-                    "step": "fallback",
+                    "step": "model",
                     "status": "completed",
-                    "fallback_model": route.fallback_model,
+                    "model": route.selected_model,
+                    "model_id": route.model_id,
                 }
             )
 
-        except Exception as fallback_error:
+        except Exception as primary_error:
             trace.append(
                 {
-                    "step": "fallback",
+                    "step": "model",
                     "status": "failed",
-                    "error": str(fallback_error),
+                    "model": route.selected_model,
+                    "model_id": route.model_id,
+                    "error": str(primary_error),
                 }
             )
 
-            raise RuntimeError(
-                "Both primary model and fallback model failed."
-            ) from fallback_error
+            if not route.fallback_model:
+                raise
+
+            try:
+                response_text = generate_text(
+                    prompt=prompt,
+                    model_id=route.fallback_model,
+                    max_tokens=400,
+                    temperature=0.2,
+                )
+
+                trace.append(
+                    {
+                        "step": "fallback",
+                        "status": "completed",
+                        "fallback_model": route.fallback_model,
+                    }
+                )
+
+            except Exception as fallback_error:
+                trace.append(
+                    {
+                        "step": "fallback",
+                        "status": "failed",
+                        "error": str(fallback_error),
+                    }
+                )
+
+                raise RuntimeError(
+                    "Both primary model and fallback model failed."
+                ) from fallback_error
+
+        response_text = normalize_farmer_response(
+            response_text
+        )
 
     # -----------------------------------------------------
-    # 5. NORMALIZE + VERIFY
+    # 5. VERIFY
     # -----------------------------------------------------
-    response_text = normalize_farmer_response(
-        response_text
-    )
-
     verification = verify_agent_response(
         response_text
     )
@@ -265,7 +371,7 @@ def run_orchestrator(
     )
 
     # -----------------------------------------------------
-    # 6. LATENCY
+    # 6. LATENCY + NEXT LOOP STATE
     # -----------------------------------------------------
     elapsed_ms = round(
         (
@@ -276,11 +382,30 @@ def run_orchestrator(
         2,
     )
 
+    multimodal_result = request.context.get("multimodal_result")
+    if multimodal_result:
+        decision = multimodal_result.get("decision", {})
+        next_step = (
+            "field_verification"
+            if decision.get("needs_field_verification", True)
+            else "wait_for_farmer"
+        )
+        trace.append({
+            "step": "reflect",
+            "status": "completed",
+            "next_state": next_step,
+            "follow_up_check": decision.get("follow_up_check", ""),
+            "recheck_after": decision.get("recheck_after", ""),
+        })
+    else:
+        next_step = "wait_for_farmer"
+
     trace.append(
         {
             "step": "complete",
             "status": "completed",
             "latency_ms": elapsed_ms,
+            "next_state": next_step,
         }
     )
 
@@ -347,4 +472,5 @@ def agent_health():
     return {
         "status": "ok",
         "service": "agent-orchestrator",
+        "flow": "route -> observe -> fuse -> decide -> verify -> reflect -> wait",
     }
