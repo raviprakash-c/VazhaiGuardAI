@@ -14,6 +14,7 @@ from parcel import router as parcel_router
 from routes.zone import router as zone_router
 from routes.bedrock import router as bedrock_router
 from routes.multimodal import router as multimodal_router
+from routes.evidence import router as evidence_router
 from voice_registration import (
     router as voice_registration_router,
 )
@@ -29,10 +30,11 @@ from weather import router as weather_router
 
 app = FastAPI(
     title="VazhaiGuardAI",
-    version="2.2.0",
+    version="2.3.0",
     description=(
         "AI-powered banana farm intelligence platform "
-        "with AWS Bedrock farmer copilot and multimodal crop inspection"
+        "with AWS Bedrock farmer copilot, multimodal crop inspection, "
+        "and temporal evidence monitoring"
     ),
 )
 
@@ -114,6 +116,7 @@ app.include_router(farm_map_router)
 app.include_router(weather_router)
 app.include_router(bedrock_router)
 app.include_router(multimodal_router)
+app.include_router(evidence_router)
 
 
 # ============================================================
@@ -125,12 +128,14 @@ def root():
     return {
         "status": "online",
         "service": "VazhaiGuardAI",
-        "version": "2.2.0",
+        "version": "2.3.0",
         "capabilities": [
             "farmer-voice-copilot",
             "weather-decision-engine",
             "multimodal-crop-inspection",
             "risk-fusion",
+            "temporal-evidence-monitor",
+            "satellite-freshness-and-conflict-detection",
         ],
     }
 
@@ -142,4 +147,5 @@ def health():
         "service": "VazhaiGuardAI",
         "bedrock_text_model": "mistral.ministral-3-8b-instruct",
         "multimodal": "enabled",
+        "evidence_monitor": "enabled",
     }
