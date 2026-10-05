@@ -4,6 +4,14 @@ export interface SatelliteEvidence {
   source?: string;
   datasets?: { sentinel2?: string; dynamic_world?: string };
   analysis_scope?: string;
+  farm_geometry?: {
+    source?: string;
+    is_farmer_confirmed?: boolean;
+    geometry_type?: string;
+    area_m2?: number | null;
+    area_hectares?: number | null;
+    area_acres?: number | null;
+  };
   resolution_m?: number;
   latest_observation?: string;
   observed_at?: string;
