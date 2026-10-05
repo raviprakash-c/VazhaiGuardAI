@@ -5,15 +5,10 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
-  Clock3,
   CloudRain,
-  Layers3,
   MapPinned,
   RefreshCw,
-  Ruler,
   Satellite,
-  ShieldCheck,
-  Sparkles,
   Volume2,
   Wind,
 } from "lucide-react";
@@ -44,7 +39,12 @@ type SavedDecision = {
 
 type SavedFarm = {
   location?: { latitude?: number; longitude?: number };
-  boundary?: { type?: "Polygon" | "MultiPolygon" | "Feature" | "FeatureCollection"; coordinates?: unknown; geometry?: unknown; features?: unknown[] };
+  boundary?: {
+    type?: "Polygon" | "MultiPolygon" | "Feature" | "FeatureCollection";
+    coordinates?: unknown;
+    geometry?: unknown;
+    features?: unknown[];
+  };
 };
 
 function readObject<T>(key: string): T | null {
@@ -83,7 +83,9 @@ function polygonPaths(boundary: SavedFarm["boundary"]): LatLngExpression[][] {
   }
   if (geometry.type === "MultiPolygon") {
     const polygons = geometry.coordinates as Coordinate[][][];
-    return polygons.map((polygon) => polygon[0]?.map(([lng, lat]) => [lat, lng] as Coordinate)).filter((path): path is Coordinate[] => Boolean(path));
+    return polygons
+      .map((polygon) => polygon[0]?.map(([lng, lat]) => [lat, lng] as Coordinate))
+      .filter((path): path is Coordinate[] => Boolean(path));
   }
   return [];
 }
@@ -134,7 +136,7 @@ export default function FarmRiskMapPage() {
 
   const speakSummary = () => {
     const action = decision?.action || "புதிய படம் எடுத்து களத்தில் மீண்டும் சரிபார்க்கவும்.";
-    speak(`பண்ணை ஆபத்து ${text.tamil}. ${action}`);
+    speak(`பண்ணை ஆபத்து ${text.tamil}. ${action}`, "ta-IN");
   };
 
   const refreshSatellite = async () => {
@@ -157,7 +159,7 @@ export default function FarmRiskMapPage() {
       <header className="sticky top-0 z-[1000] border-b border-[#dfe9e2] bg-white/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6">
           <div className="flex items-center gap-3"><Button variant="ghost" size="icon" onClick={() => navigate(-1)}><ArrowLeft className="h-5 w-5" /></Button><div><p className="text-xs font-bold uppercase tracking-[0.12em] text-[#718078]">VazhaiGuard AI</p><h1 className="text-lg font-bold">Farm Risk Map</h1></div></div>
-          <Button onClick={refreshSatellite} disabled={refreshing} variant="outline" className="rounded-xl border-[#dfe9e2] bg-white"> <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh satellite</Button>
+          <Button onClick={refreshSatellite} disabled={refreshing} variant="outline" className="rounded-xl border-[#dfe9e2] bg-white"><RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> Refresh satellite</Button>
         </div>
       </header>
 
@@ -165,7 +167,7 @@ export default function FarmRiskMapPage() {
         <section className="overflow-hidden rounded-[28px] border border-[#dfe9e2] bg-white shadow-sm">
           <div className="relative h-[560px]">
             <MapContainer center={center} zoom={15} scrollWheelZoom className="h-full w-full">
-              <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+              <TileLayer attribution="&copy; OpenStreetMap contributors" url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
               <MapRecenter center={center} />
               {paths.map((path, index) => <Polygon key={index} positions={path} pathOptions={{ color: text.ring, fillColor: text.fill, fillOpacity: 0.25, weight: 3, dashArray: farmerConfirmedBoundary ? undefined : "8 8" }} />)}
               <CircleMarker center={center} radius={9} pathOptions={{ color: "#13271d", fillColor: "#ffffff", fillOpacity: 1, weight: 3 }} />
@@ -198,14 +200,14 @@ export default function FarmRiskMapPage() {
           </div>
 
           <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
-            <div className="flex items-center justify-between"><div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-[#146c43]" /><h3 className="font-bold text-[#13271d]">Evidence sources</h3></div><span className="text-xs font-bold text-[#146c43]">{confidence}%</span></div>
-            <div className="mt-4 space-y-3 text-sm"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Camera className="h-4 w-4" /> Farmer photo</span><span className="font-semibold">{decision?.vision?.observation ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><CloudRain className="h-4 w-4" /> Weather</span><span className="font-semibold">{weatherUsed ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Satellite className="h-4 w-4" /> Satellite</span><span className="font-semibold">{satelliteUsed ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Wind className="h-4 w-4" /> Storm context</span><span className="font-semibold">{stormUsed ? "✓" : "—"}</span></div></div>
+            <div className="flex items-center justify-between"><div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-[#146c43]" /><h3 className="font-bold text-[#13271d]">Evidence sources</h3></div><span className="text-xs font-bold text-[#146c43]">{confidence}% confidence</span></div>
+            <div className="mt-4 space-y-3 text-sm"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Camera className="h-4 w-4" /> Farmer photo</span><span className="font-semibold">{decision?.vision?.observation ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><CloudRain className="h-4 w-4" /> Weather</span><span className="font-semibold">{weatherUsed ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Satellite className="h-4 w-4" /> Satellite</span><span className="font-semibold">{satelliteUsed || satellite ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Wind className="h-4 w-4" /> Storm context</span><span className="font-semibold">{stormUsed ? "✓" : "—"}</span></div></div>
           </div>
 
           <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
-            <div className="flex items-center gap-2"><Volume2 className="h-5 w-5 text-[#146c43]" /><h3 className="font-bold text-[#13271d]">Farmer action</h3></div>
-            <p className="mt-3 text-sm leading-6 text-[#405148]">{decision?.action || "புதிய படம் எடுத்து களத்தில் மீண்டும் சரிபார்க்கவும்."}</p>
-            <div className="mt-4 flex gap-2"><Button onClick={speakSummary} disabled={isSpeaking} variant="outline" className="flex-1 rounded-xl border-[#dfe9e2] bg-white"><Volume2 className="mr-2 h-4 w-4" /> {isSpeaking ? "பேசுகிறது…" : "தமிழில் கேளுங்கள்"}</Button><Button onClick={() => navigate("/inspect")} className="flex-1 rounded-xl bg-[#146c43] hover:bg-[#0f5836]"><Camera className="mr-2 h-4 w-4" /> படம் எடுக்க</Button></div>
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#718078]">What to do now</p>
+            <p className="mt-2 text-base font-semibold leading-7 text-[#13271d]">{decision?.action || "புதிய படம் எடுத்து களத்தில் மீண்டும் சரிபார்க்கவும்."}</p>
+            <div className="mt-4 grid grid-cols-2 gap-3"><Button onClick={speakSummary} variant="outline" className="rounded-xl border-[#dfe9e2]" disabled={isSpeaking}><Volume2 className="mr-2 h-4 w-4" /> {isSpeaking ? "Speaking…" : "கேளுங்கள்"}</Button><Button onClick={() => navigate("/inspection")} className="rounded-xl bg-[#146c43] hover:bg-[#0f5b38]"><Camera className="mr-2 h-4 w-4" /> புதிய படம்</Button></div>
           </div>
         </aside>
       </main>
