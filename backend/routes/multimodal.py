@@ -14,14 +14,10 @@ from services.multimodal_service import (
     analyze_crop_image,
     decode_data_url,
 )
-
+from services.unified_risk_engine import calculate_unified_risk
 
 router = APIRouter(prefix="/ai/multimodal", tags=["multimodal-ai"])
-
-TEXT_MODEL_ID = os.getenv(
-    "VAZHAIGUARD_TEXT_MODEL",
-    "mistral.ministral-3-8b-instruct",
-)
+TEXT_MODEL_ID = os.getenv("VAZHAIGUARD_TEXT_MODEL", "mistral.ministral-3-8b-instruct")
 
 
 class CropInspectionRequest(BaseModel):
@@ -46,126 +42,30 @@ class InspectAndDecideRequest(CropInspectionRequest):
     """One-call end-to-end multimodal farmer decision request."""
 
 
-
-def _clamp(value: float) -> float:
-    return max(0.0, min(100.0, value))
-
-
-def _number(value: Any, default: float = 0.0) -> float:
-    try:
-        if value is None or value == "":
-            return default
-        return float(value)
-    except (TypeError, ValueError):
-        return default
-
-
-def _weather_score(weather: dict[str, Any] | None) -> float:
-    if not weather:
-        return 0.0
-
-    next_24 = weather.get("next_24_hours") or {}
-    rain = _number(
-        weather.get("max_rain_probability", next_24.get("max_rain_probability")),
-    )
-    precipitation = _number(
-        weather.get("total_precipitation", next_24.get("total_precipitation")),
-    )
-    gust = _number(
-        weather.get("max_wind_gust", next_24.get("max_wind_gust")),
-    )
-    wind = _number(
-        weather.get("max_wind_speed", next_24.get("max_wind_speed")),
-    )
-
-    return _clamp(
-        (rain * 0.50)
-        + (min(precipitation, 30.0) / 30.0 * 30.0)
-        + (min(max(gust, wind * 1.5), 60.0) / 60.0 * 20.0)
-    )
-
-
-def _satellite_score(satellite: dict[str, Any] | None) -> float:
-    if not satellite:
-        return 0.0
-
-    if satellite.get("risk_score") is not None:
-        return _clamp(_number(satellite.get("risk_score")))
-
-    if satellite.get("ndvi") is not None:
-        ndvi = _number(satellite.get("ndvi"))
-        return _clamp((1.0 - ndvi) * 100.0)
-
-    if satellite.get("health_index") is not None:
-        health = _number(satellite.get("health_index"))
-        return _clamp((1.0 - health) * 100.0)
-
-    return 0.0
-
-
-def _vision_score(vision: dict[str, Any]) -> float:
-    urgency = {
-        "low": 20.0,
-        "medium": 55.0,
-        "high": 85.0,
-    }.get(str(vision.get("urgency", "low")).lower(), 20.0)
-    confidence = _clamp(_number(vision.get("visual_confidence")))
-    return _clamp(urgency * 0.75 + confidence * 25.0)
-
-
-def _risk_label(score: float) -> str:
-    if score >= 70:
-        return "high"
-    if score >= 40:
-        return "moderate"
-    return "low"
-
-
 def _fuse_signals(
     vision: dict[str, Any],
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
+    farm_context: dict[str, Any] | None = None,
 ) -> tuple[float, str, dict[str, float], list[str], dict[str, float]]:
-    scores = {
-        "vision": round(_vision_score(vision), 1),
-        "weather": round(_weather_score(weather), 1),
-        "satellite": round(_satellite_score(satellite), 1),
-    }
+    """Compatibility wrapper around the deterministic unified risk engine.
 
-    configured_weights = {
-        "vision": 0.50,
-        "weather": 0.30,
-        "satellite": 0.20,
-    }
-
-    evidence = {
-        "vision": bool(vision),
-        "weather": bool(weather),
-        "satellite": bool(satellite),
-    }
-
-    active_weight = sum(
-        configured_weights[name]
-        for name, available in evidence.items()
-        if available
+    Follow-up/reinspection code imports this function, so the public helper is
+    retained while all inspection paths now share freshness and conflict rules.
+    """
+    result = calculate_unified_risk(
+        vision=vision,
+        weather=weather,
+        satellite=satellite,
+        farm_context=farm_context,
     )
-
-    if active_weight <= 0:
-        return 0.0, "low", scores, [], {}
-
-    normalized_weights = {
-        name: round(configured_weights[name] / active_weight, 3)
-        for name, available in evidence.items()
-        if available
-    }
-
-    score = sum(
-        scores[name] * normalized_weights[name]
-        for name in normalized_weights
+    return (
+        float(result["score"]),
+        str(result["level"]),
+        result["signal_scores"],
+        result["signals_used"],
+        result["weights_used"],
     )
-
-    score = round(_clamp(score), 1)
-    return score, _risk_label(score), scores, list(normalized_weights), normalized_weights
 
 
 def _build_action_prompt(
@@ -180,11 +80,10 @@ def _build_action_prompt(
 ) -> str:
     tamil = language.lower().startswith("ta") or language in {"tamil", "தமிழ்"}
     response_language = "simple spoken Tamil" if tamil else "simple English"
-
     return f"""
 You are the final farmer decision agent of VazhaiGuard AI for a banana farm in Tamil Nadu.
 Combine the supplied visual, weather, satellite (if available), and farm-context evidence.
-The unified risk engine has calculated {score:.0f}/100 ({label}).
+The deterministic unified risk engine calculated {score:.0f}/100 ({label}).
 
 Respond in {response_language}.
 
@@ -249,23 +148,18 @@ def _generate_farmer_decision(
         max_tokens=650,
         temperature=0.2,
     ).strip()
-
     try:
         result = extract_json(raw)
         if isinstance(result, dict) and result.get("farmer_message"):
             return result
     except Exception:
         pass
-
-    # Safe fallback if the decision model returns plain text rather than JSON.
     return {
         "summary": raw,
         "priority_actions": [],
         "follow_up_check": "",
         "recheck_after": "",
-        "needs_field_verification": bool(
-            vision.get("needs_field_verification", True)
-        ),
+        "needs_field_verification": bool(vision.get("needs_field_verification", True)),
         "farmer_message": raw,
     }
 
@@ -277,14 +171,13 @@ def multimodal_health() -> dict[str, Any]:
         "primary_vision_model": PRIMARY_VISION_MODEL,
         "fallback_vision_model": SECONDARY_VISION_MODEL,
         "decision_model": TEXT_MODEL_ID,
-        "fusion": "vision + weather + optional satellite + farm context",
+        "fusion": "vision + weather + optional satellite + farm context + freshness/conflict rules",
         "status": "configured",
     }
 
 
 @router.post("/inspect")
 def inspect_crop(request: CropInspectionRequest) -> dict[str, Any]:
-    """Backward-compatible vision-only endpoint."""
     started = time.perf_counter()
     try:
         image_bytes, content_type = decode_data_url(request.image_data_url)
@@ -298,11 +191,7 @@ def inspect_crop(request: CropInspectionRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Multimodal inspection is temporarily unavailable.",
-        ) from exc
-
+        raise HTTPException(status_code=503, detail="Multimodal inspection is temporarily unavailable.") from exc
     return {
         "zone_id": request.zone_id,
         "vision": vision,
@@ -313,13 +202,9 @@ def inspect_crop(request: CropInspectionRequest) -> dict[str, Any]:
 
 @router.post("/risk-fusion")
 def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
-    """Fuse already-computed evidence and ask Ministral for the final action."""
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
-        request.vision,
-        request.weather,
-        request.satellite,
+        request.vision, request.weather, request.satellite, request.farm_context
     )
-
     try:
         decision = _generate_farmer_decision(
             vision=request.vision,
@@ -331,19 +216,10 @@ def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
             language=request.language,
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Decision model is temporarily unavailable.",
-        ) from exc
-
+        raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
     return {
         "zone_id": request.zone_id,
-        "risk": {
-            "score": score,
-            "level": label,
-            "signals_used": signals_used,
-            "weights_used": weights_used,
-        },
+        "risk": {"score": score, "level": label, "signals_used": signals_used, "weights_used": weights_used},
         "signal_scores": signal_scores,
         "decision": decision,
         "action": decision.get("farmer_message", ""),
@@ -353,9 +229,7 @@ def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
 
 @router.post("/inspect-and-decide")
 def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
-    """Complete multimodal agentic path: photo -> evidence -> risk -> decision."""
     started = time.perf_counter()
-
     try:
         image_bytes, content_type = decode_data_url(request.image_data_url)
         vision = analyze_crop_image(
@@ -368,17 +242,14 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Multimodal inspection is temporarily unavailable.",
-        ) from exc
+        raise HTTPException(status_code=503, detail="Multimodal inspection is temporarily unavailable.") from exc
 
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
         vision,
         request.weather_context,
         request.satellite_context,
+        request.farm_context,
     )
-
     try:
         decision = _generate_farmer_decision(
             vision=vision,
@@ -390,20 +261,12 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
             language=request.language,
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail="Decision model is temporarily unavailable.",
-        ) from exc
+        raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
 
     return {
         "zone_id": request.zone_id,
         "vision": vision,
-        "risk": {
-            "score": score,
-            "level": label,
-            "signals_used": signals_used,
-            "weights_used": weights_used,
-        },
+        "risk": {"score": score, "level": label, "signals_used": signals_used, "weights_used": weights_used},
         "signal_scores": signal_scores,
         "decision": decision,
         "action": decision.get("farmer_message", ""),
