@@ -8,16 +8,18 @@ const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000"
 ).replace(/\/$/, "");
 
+async function parseError(response: Response, fallback: string): Promise<Error> {
+  const body = await response.json().catch(() => null);
+  return new Error(body?.detail || fallback);
+}
+
 export async function askCopilot(payload: CopilotRequest): Promise<CopilotResponse> {
   const response = await fetch(`${API_BASE_URL}/agent/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.detail || "Unable to get a response from VazhaiGuard AI.");
-  }
+  if (!response.ok) throw await parseError(response, "Unable to get a response from VazhaiGuard AI.");
   return response.json();
 }
 
@@ -46,10 +48,47 @@ export async function sendActionFeedback(
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    throw new Error(body?.detail || "Unable to save the action feedback.");
-  }
+  if (!response.ok) throw await parseError(response, "Unable to save the action feedback.");
+  return response.json();
+}
+
+export interface ReinspectionRequest {
+  action_id: string;
+  language: CopilotLanguage;
+  image_data_url: string;
+  previous_risk_score?: number | null;
+  previous_risk_level?: string | null;
+  weather_context?: Record<string, unknown> | null;
+  satellite_context?: Record<string, unknown> | null;
+  farm_context?: Record<string, unknown> | null;
+}
+
+export interface ReinspectionResponse {
+  success: boolean;
+  action_id: string;
+  current_risk_score: number;
+  current_risk_level: string;
+  previous_risk_score?: number | null;
+  risk_delta?: number | null;
+  trend: "improving" | "worsening" | "stable" | "baseline";
+  visual_confidence?: number | null;
+  needs_field_verification: boolean;
+  farmer_message: string;
+  next_state: string;
+  signals_used: string[];
+  model?: string | null;
+  recorded_at: string;
+}
+
+export async function reinspectAfterFeedback(
+  payload: ReinspectionRequest
+): Promise<ReinspectionResponse> {
+  const response = await fetch(`${API_BASE_URL}/agent/reinspect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!response.ok) throw await parseError(response, "Unable to inspect the new crop photo.");
   return response.json();
 }
 
