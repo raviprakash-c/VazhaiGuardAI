@@ -1,13 +1,19 @@
-import { Camera, CheckCircle2, ImagePlus, Loader2, MapPinned, ShieldAlert, Volume2, CloudRain, Satellite } from "lucide-react";
+import { Camera, CheckCircle2, ImagePlus, Loader2, MapPinned, ShieldAlert, Volume2, CloudRain, Satellite, Leaf } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
 import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
 import { inspectAndDecide, type InspectAndDecideResult } from "../services/multimodalApi";
+import { getSatelliteEvidence, type SatelliteEvidence } from "../services/satelliteApi";
 import { getWeather } from "../services/weatherApi";
 
 type WeatherContext = Record<string, unknown>;
+type FarmLocation = {
+  latitude: number;
+  longitude: number;
+  boundary?: Record<string, unknown>;
+};
 
 const riskStyle = {
   low: "border-emerald-200 bg-emerald-50 text-emerald-800",
@@ -24,26 +30,54 @@ function readFileAsDataUrl(file: File): Promise<string> {
   });
 }
 
-async function loadNearbyWeather(): Promise<WeatherContext | null> {
+function readSavedFarmLocation(): FarmLocation | null {
+  try {
+    const raw = localStorage.getItem("vazhaiguard_farm_complete");
+    if (!raw) return null;
+    const saved = JSON.parse(raw) as Record<string, unknown>;
+    const location = saved.location as Record<string, unknown> | undefined;
+    if (!location) return null;
+
+    const latitude = Number(location.latitude);
+    const longitude = Number(location.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return null;
+
+    const boundary = saved.boundary;
+    return {
+      latitude,
+      longitude,
+      boundary: boundary && typeof boundary === "object"
+        ? boundary as Record<string, unknown>
+        : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function loadDeviceLocation(): Promise<FarmLocation | null> {
   if (!navigator.geolocation) return null;
 
   return new Promise((resolve) => {
     navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        try {
-          const weather = await getWeather(
-            position.coords.latitude,
-            position.coords.longitude,
-          );
-          resolve(weather as unknown as WeatherContext);
-        } catch {
-          resolve(null);
-        }
-      },
+      (position) => resolve({
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      }),
       () => resolve(null),
       { enableHighAccuracy: false, timeout: 8000, maximumAge: 10 * 60 * 1000 },
     );
   });
+}
+
+async function loadWeatherAt(location: FarmLocation | null): Promise<WeatherContext | null> {
+  if (!location) return null;
+  try {
+    const weather = await getWeather(location.latitude, location.longitude);
+    return weather as unknown as WeatherContext;
+  } catch {
+    return null;
+  }
 }
 
 export default function CropInspectionPage() {
@@ -55,6 +89,8 @@ export default function CropInspectionPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [weatherLoaded, setWeatherLoaded] = useState(false);
+  const [satelliteEvidence, setSatelliteEvidence] = useState<SatelliteEvidence | null>(null);
+  const [farmLocationSource, setFarmLocationSource] = useState<"saved-farm" | "device" | "unavailable">("unavailable");
   const { speak, isSpeaking } = useVoiceAssistant();
 
   const chooseImage = async (file?: File) => {
@@ -67,6 +103,7 @@ export default function CropInspectionPage() {
       setError("");
       setResult(null);
       setWeatherLoaded(false);
+      setSatelliteEvidence(null);
       const dataUrl = await readFileAsDataUrl(file);
       setImageDataUrl(dataUrl);
       setPreview(dataUrl);
@@ -80,19 +117,54 @@ export default function CropInspectionPage() {
     setBusy(true);
     setError("");
     try {
-      // Weather is a real evidence source when browser/farm location permission is available.
-      // If location is unavailable, the decision engine safely excludes weather rather than inventing it.
-      const weather = await loadNearbyWeather();
+      // Prefer the farmer-confirmed farm location saved during Farm Setup.
+      // Device GPS is only a fallback; it is never silently presented as the farm boundary.
+      const savedFarm = readSavedFarmLocation();
+      const location = savedFarm || await loadDeviceLocation();
+      setFarmLocationSource(savedFarm ? "saved-farm" : location ? "device" : "unavailable");
+
+      const weather = await loadWeatherAt(location);
       setWeatherLoaded(Boolean(weather));
+
+      let satellite: SatelliteEvidence | null = null;
+      if (location) {
+        try {
+          satellite = await getSatelliteEvidence({
+            latitude: location.latitude,
+            longitude: location.longitude,
+            boundary: savedFarm?.boundary,
+            lookbackDays: 45,
+            baselineDays: 45,
+            maxCloudPercent: 35,
+          });
+        } catch (satelliteError) {
+          // Satellite is an evidence source, not a hard dependency for photo inspection.
+          satellite = {
+            available: false,
+            reason: satelliteError instanceof Error
+              ? satelliteError.message
+              : "Satellite evidence is not available.",
+          };
+        }
+      } else {
+        satellite = {
+          available: false,
+          reason: "Farm location is unavailable. Select/confirm the farm location before using satellite evidence.",
+        };
+      }
+      setSatelliteEvidence(satellite);
 
       const decision = await inspectAndDecide({
         imageDataUrl,
         language: "ta-IN",
         zoneId: "field-photo",
-        farmContext: { crop: "banana", inspection_source: "farmer_photo" },
+        farmContext: {
+          crop: "banana",
+          inspection_source: "farmer_photo",
+          location_source: farmLocationSource === "saved-farm" ? "farmer_confirmed_farm" : "device_gps_fallback",
+        },
         weatherContext: weather || undefined,
-        // Satellite evidence remains optional until a real satellite-risk provider is connected.
-        satelliteContext: undefined,
+        satelliteContext: satellite?.available ? satellite as unknown as Record<string, unknown> : undefined,
       });
 
       setResult(decision);
@@ -108,7 +180,7 @@ export default function CropInspectionPage() {
     speak(result.action, "ta-IN");
   };
 
-  const satelliteAvailable = result?.risk.signals_used.includes("satellite") ?? false;
+  const satelliteAvailable = satelliteEvidence?.available === true && result?.risk.signals_used.includes("satellite") === true;
 
   return (
     <div className="min-h-screen bg-[#f5fbf7] px-4 py-6 sm:px-6 lg:px-8">
@@ -117,7 +189,7 @@ export default function CropInspectionPage() {
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]">VazhaiGuard AI • Multimodal Field Check</p>
             <h1 className="mt-1 text-2xl font-bold text-[#13271d] sm:text-3xl">பயிர் புகைப்படம் சரிபார்ப்பு</h1>
-            <p className="mt-1 text-sm text-[#718078]">புகைப்படம் + வானிலை + கிடைக்கும் பண்ணை/செயற்கைக்கோள் ஆதாரங்களை ஒன்றாக வைத்து AI முடிவை உருவாக்குகிறது.</p>
+            <p className="mt-1 text-sm text-[#718078]">புகைப்படம் + வானிலை + உண்மையான satellite evidence + பண்ணை context ஆகியவற்றை ஒன்றாக வைத்து AI முடிவை உருவாக்குகிறது.</p>
           </div>
           <Button variant="outline" onClick={() => navigate("/copilot")} className="rounded-xl border-[#dfe9e2] bg-white">Ask Copilot</Button>
         </header>
@@ -166,7 +238,7 @@ export default function CropInspectionPage() {
             {busy && (
               <div className="mt-4 rounded-2xl border border-[#dfe9e2] bg-[#f8fbf9] p-4 text-sm text-[#596a60]">
                 <p className="font-semibold text-[#13271d]">பல ஆதாரங்களை இணைக்கிறேன்...</p>
-                <p className="mt-1">புகைப்படம் → வானிலை → கிடைக்கும் satellite evidence → risk → Ministral 8B farmer action</p>
+                <p className="mt-1">புகைப்படம் → வானிலை → Sentinel-2 / Dynamic World → risk → Ministral 8B farmer action</p>
               </div>
             )}
 
@@ -180,7 +252,7 @@ export default function CropInspectionPage() {
                   <MapPinned className="mt-1 h-5 w-5 text-[#146c43]" />
                   <div>
                     <h2 className="font-bold text-[#13271d]">Evidence fusion</h2>
-                    <p className="mt-2 text-sm leading-6 text-[#596a60]">புகைப்படம் செடியின் கண்ணுக்குத் தெரியும் அறிகுறிகளைத் தருகிறது. வானிலை வெளிப்புற அழுத்தத்தைச் சொல்கிறது. உண்மையான satellite signal கிடைத்தால் அது தனியாக மூன்றாவது evidence ஆக சேர்க்கப்படும். கிடைக்காத ஆதாரத்தை AI ஒருபோதும் உருவாக்காது.</p>
+                    <p className="mt-2 text-sm leading-6 text-[#596a60]">புகைப்படம் செடியின் கண்ணுக்குத் தெரியும் அறிகுறிகளைத் தருகிறது. வானிலை வெளிப்புற அழுத்தத்தைச் சொல்கிறது. Sentinel-2 மற்றும் Dynamic World பண்ணை பகுதி அளவில் satellite evidence தருகின்றன. கிடைக்காத ஆதாரத்தை AI உருவாக்காது.</p>
                   </div>
                 </div>
               </div>
@@ -213,6 +285,51 @@ export default function CropInspectionPage() {
                       {result.vision.recommended_checks.map((check) => <li key={check} className="flex gap-2 text-sm text-[#596a60]"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-[#146c43]" />{check}</li>)}
                     </ul>
                   </div>
+                </div>
+
+                <div className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm sm:p-6">
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Satellite evidence</p>
+                      <h2 className="mt-1 text-lg font-bold text-[#13271d]">பண்ணை பகுதி நிலை</h2>
+                    </div>
+                    <span className={`rounded-full border px-3 py-1 text-xs font-bold ${satelliteAvailable ? "border-violet-200 bg-violet-50 text-violet-800" : "border-slate-200 bg-slate-50 text-slate-500"}`}>
+                      {satelliteAvailable ? "REAL SATELLITE" : "NOT INCLUDED"}
+                    </span>
+                  </div>
+
+                  <div className="mt-4 flex flex-wrap gap-2 text-[11px]">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1 text-violet-700"><Satellite className="h-3 w-3" />Sentinel-2</span>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-emerald-700"><Leaf className="h-3 w-3" />Dynamic World</span>
+                    <span className="rounded-full bg-slate-50 px-3 py-1 text-slate-600">{farmLocationSource === "saved-farm" ? "Farmer-confirmed farm location" : farmLocationSource === "device" ? "Device GPS fallback" : "Location unavailable"}</span>
+                  </div>
+
+                  {satelliteEvidence?.available ? (
+                    <>
+                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">NDVI</p><p className="mt-1 font-bold text-[#13271d]">{satelliteEvidence.ndvi?.toFixed(2) ?? "—"}</p></div>
+                        <div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">NDRE</p><p className="mt-1 font-bold text-[#13271d]">{satelliteEvidence.ndre?.toFixed(2) ?? "—"}</p></div>
+                        <div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">NDWI</p><p className="mt-1 font-bold text-[#13271d]">{satelliteEvidence.ndwi?.toFixed(2) ?? "—"}</p></div>
+                        <div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">Crop probability</p><p className="mt-1 font-bold text-[#13271d]">{satelliteEvidence.dynamic_world?.crop_probability != null ? `${Math.round(satelliteEvidence.dynamic_world.crop_probability * 100)}%` : "—"}</p></div>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+                        <div className="rounded-xl border border-[#e5ece7] p-3"><p className="text-[10px] font-bold uppercase text-[#718078]">Vegetation trend</p><p className="mt-1 text-sm font-semibold text-[#13271d]">{satelliteEvidence.trend || "—"}</p></div>
+                        <div className="rounded-xl border border-[#e5ece7] p-3"><p className="text-[10px] font-bold uppercase text-[#718078]">Latest observation</p><p className="mt-1 text-sm font-semibold text-[#13271d]">{satelliteEvidence.observation_age_hours != null ? `${Math.round(satelliteEvidence.observation_age_hours / 24)} days ago` : "—"}</p></div>
+                        <div className="rounded-xl border border-[#e5ece7] p-3"><p className="text-[10px] font-bold uppercase text-[#718078]">Cloud quality</p><p className="mt-1 text-sm font-semibold text-[#13271d]">{satelliteEvidence.cloud_percent_mean != null ? `${satelliteEvidence.cloud_percent_mean.toFixed(0)}% scene cloud` : "—"}</p></div>
+                      </div>
+
+                      {satelliteEvidence.warnings?.length ? (
+                        <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">
+                          {satelliteEvidence.warnings[0]}
+                        </div>
+                      ) : null}
+                    </>
+                  ) : (
+                    <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">
+                      {satelliteEvidence?.reason || "Satellite evidence was not available for this inspection. The photo and weather evidence can still be used."}
+                    </div>
+                  )}
                 </div>
 
                 <div className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm sm:p-6">
