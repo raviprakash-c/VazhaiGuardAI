@@ -1,3 +1,2 @@
-# Optional geospatial dependency for VazhaiGuard satellite evidence
-# Install into the existing backend virtual environment.
-earthengine-api>=1.6.0,<2.0.0
+# Copernicus Data Space Ecosystem satellite evidence
+requests>=2.31.0,<3.0.0
