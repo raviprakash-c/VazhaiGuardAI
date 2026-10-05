@@ -5,13 +5,17 @@ import {
   ArrowLeft,
   Camera,
   CheckCircle2,
+  Clock3,
+  CloudRain,
+  Layers3,
   MapPinned,
   Mic,
   RefreshCw,
-  ShieldCheck,
+  Ruler,
   Satellite,
+  ShieldCheck,
+  Sparkles,
   Volume2,
-  CloudRain,
   Wind,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
@@ -21,9 +25,9 @@ import type { LatLngExpression } from "leaflet";
 
 import { Button } from "../components/ui/button";
 import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
+import type { SatelliteEvidence } from "../services/satelliteApi";
 
 const DEFAULT_CENTER: LatLngExpression = [9.5, 77.5];
-
 type RiskLevel = "low" | "moderate" | "high";
 
 type SavedDecision = {
@@ -32,24 +36,15 @@ type SavedDecision = {
     level?: RiskLevel;
     evidence_confidence?: number;
     signals_used?: string[];
-    evidence_state?: {
-      satellite_reliability?: number;
-      conflicts?: Array<{ type?: string }>;
-    };
+    evidence_state?: { satellite_reliability?: number; conflicts?: Array<{ type?: string }> };
   };
   action?: string;
-  vision?: {
-    observation?: string;
-    needs_field_verification?: boolean;
-  };
+  vision?: { observation?: string; needs_field_verification?: boolean };
 };
 
 type SavedFarm = {
   location?: { latitude?: number; longitude?: number };
-  boundary?: {
-    type?: "Polygon" | "MultiPolygon";
-    coordinates?: unknown;
-  };
+  boundary?: { type?: "Polygon" | "MultiPolygon" | "Feature" | "FeatureCollection"; coordinates?: unknown; geometry?: unknown; features?: unknown[] };
 };
 
 function readObject<T>(key: string): T | null {
@@ -69,16 +64,34 @@ function MapRecenter({ center }: { center: LatLngExpression }) {
   return null;
 }
 
-function polygonRings(boundary: SavedFarm["boundary"]): LatLngExpression[][] {
-  if (!boundary?.coordinates || boundary.type !== "Polygon") return [];
-  const rings = boundary.coordinates as number[][][][];
-  return rings.map((ring) => ring.map(([lng, lat]) => [lat, lng] as LatLngExpression));
+function boundaryGeometry(boundary: SavedFarm["boundary"]): { type?: string; coordinates?: unknown } | null {
+  if (!boundary) return null;
+  if (boundary.type === "Feature") return (boundary.geometry as { type?: string; coordinates?: unknown } | undefined) || null;
+  if (boundary.type === "FeatureCollection") {
+    const first = boundary.features?.[0] as { geometry?: { type?: string; coordinates?: unknown } } | undefined;
+    return first?.geometry || null;
+  }
+  return boundary;
 }
 
-const riskText: Record<RiskLevel, { title: string; tamil: string; className: string }> = {
-  low: { title: "Low risk", tamil: "ஆபத்து குறைவு", className: "border-emerald-200 bg-emerald-50 text-emerald-800" },
-  moderate: { title: "Watch this area", tamil: "கவனமாக கண்காணிக்கவும்", className: "border-amber-200 bg-amber-50 text-amber-900" },
-  high: { title: "Act soon", tamil: "விரைவாக நடவடிக்கை எடுக்கவும்", className: "border-red-200 bg-red-50 text-red-800" },
+function polygonPaths(boundary: SavedFarm["boundary"]): LatLngExpression[][] {
+  const geometry = boundaryGeometry(boundary);
+  if (!geometry?.coordinates) return [];
+  if (geometry.type === "Polygon") {
+    const rings = geometry.coordinates as number[][][][];
+    return rings.slice(0, 1).map((ring) => ring.map(([lng, lat]) => [lat, lng] as LatLngExpression));
+  }
+  if (geometry.type === "MultiPolygon") {
+    const polygons = geometry.coordinates as number[][][][][];
+    return polygons.map((polygon) => polygon[0]?.map(([lng, lat]) => [lat, lng] as LatLngExpression)).filter(Boolean) as LatLngExpression[][];
+  }
+  return [];
+}
+
+const riskText: Record<RiskLevel, { title: string; tamil: string; className: string; ring: string; fill: string }> = {
+  low: { title: "Low risk", tamil: "ஆபத்து குறைவு", className: "border-emerald-200 bg-emerald-50 text-emerald-800", ring: "#15803d", fill: "#22c55e" },
+  moderate: { title: "Watch this area", tamil: "கவனமாக கண்காணிக்கவும்", className: "border-amber-200 bg-amber-50 text-amber-900", ring: "#b7791f", fill: "#f59e0b" },
+  high: { title: "Act soon", tamil: "விரைவாக நடவடிக்கை எடுக்கவும்", className: "border-red-200 bg-red-50 text-red-800", ring: "#b91c1c", fill: "#ef4444" },
 };
 
 function levelFromScore(score: number): RiskLevel {
@@ -87,22 +100,34 @@ function levelFromScore(score: number): RiskLevel {
   return "low";
 }
 
+function formatAge(hours?: number | null): string {
+  if (hours == null || !Number.isFinite(hours)) return "தகவல் இல்லை";
+  if (hours < 24) return `${Math.max(1, Math.round(hours))} மணி முன்`;
+  const days = Math.round(hours / 24);
+  return `${days} நாள் முன்`;
+}
+
 export default function FarmRiskMapPage() {
   const navigate = useNavigate();
   const { speak, isSpeaking } = useVoiceAssistant();
   const [decision, setDecision] = useState<SavedDecision | null>(null);
   const [farm, setFarm] = useState<SavedFarm | null>(null);
+  const [satellite, setSatellite] = useState<SatelliteEvidence | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
 
   const reload = () => {
-    setDecision(readObject<SavedDecision>("vazhaiguard_last_decision"));
-    setFarm(readObject<SavedFarm>("vazhaiguard_farm_complete"));
+    setRefreshing(true);
+    window.setTimeout(() => {
+      setDecision(readObject<SavedDecision>("vazhaiguard_last_decision"));
+      setFarm(readObject<SavedFarm>("vazhaiguard_farm_complete"));
+      setSatellite(readObject<SatelliteEvidence>("vazhaiguard_last_satellite_evidence"));
+      setRefreshing(false);
+    }, 280);
   };
 
-  useEffect(() => {
-    reload();
-  }, []);
+  useEffect(() => reload(), []);
 
-  const score = Number(decision?.risk?.score ?? 0);
+  const score = Number(decision?.risk?.score ?? satellite?.risk_score ?? 0);
   const level = decision?.risk?.level ?? levelFromScore(score);
   const text = riskText[level];
   const center = useMemo<LatLngExpression>(() => {
@@ -110,150 +135,102 @@ export default function FarmRiskMapPage() {
     const lng = Number(farm?.location?.longitude);
     return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : DEFAULT_CENTER;
   }, [farm]);
-  const rings = polygonRings(farm?.boundary);
+  const paths = polygonPaths(farm?.boundary);
   const satelliteUsed = decision?.risk?.signals_used?.includes("satellite") ?? false;
-  const hasSatelliteConflict = decision?.risk?.evidence_state?.conflicts?.some(
-    (item) => item.type === "temporal_crop_conflict",
-  ) ?? false;
-  const confidence = Math.round(Number(decision?.risk?.evidence_confidence ?? 0) * 100);
+  const hasSatelliteConflict = decision?.risk?.evidence_state?.conflicts?.some((item) => item.type === "temporal_crop_conflict") ?? false;
+  const confidence = Math.round(Number(decision?.risk?.evidence_confidence ?? satellite?.confidence ?? 0) * 100);
+  const areaHa = satellite?.farm_geometry?.area_hectares;
+  const areaAcres = satellite?.farm_geometry?.area_acres;
+  const farmerConfirmedBoundary = satellite?.farm_geometry?.is_farmer_confirmed ?? paths.length > 0;
+  const trend = satellite?.trend;
 
   const speakSummary = () => {
-    const message = decision?.action
-      ? decision.action
-      : `உங்கள் தோட்டத்தின் தற்போதைய ஆபத்து ${text.tamil}. புகைப்படம் எடுத்து மீண்டும் சரிபார்க்கவும்.`;
+    const message = decision?.action || `உங்கள் தோட்டத்தின் தற்போதைய ஆபத்து ${text.tamil}. ${satellite?.trend === "declining" ? "தாவர வளர்ச்சி குறைந்து வருகிறது. களத்தில் மீண்டும் சரிபார்க்கவும்." : "புகைப்படம் எடுத்து மீண்டும் சரிபார்க்கவும்."}`;
     speak(message, "ta-IN");
   };
 
   return (
     <div className="min-h-screen bg-[#f5fbf7] px-4 py-5 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-6xl">
-        <header className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <header className="mb-5 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]">VazhaiGuard AI • Farm safety map</p>
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.15em] text-[#146c43]"><Sparkles className="h-3.5 w-3.5" /> VazhaiGuard AI • Satellite farm view</div>
             <h1 className="mt-1 text-2xl font-bold text-[#13271d] sm:text-3xl">உங்கள் தோட்டத்தின் ஆபத்து வரைபடம்</h1>
-            <p className="mt-1 text-sm text-[#596a60]">நிறத்தை பார்த்தால் போதும்: பச்சை = பாதுகாப்பு, மஞ்சள் = கவனம், சிவப்பு = விரைவாக நடவடிக்கை.</p>
+            <p className="mt-1 max-w-2xl text-sm leading-6 text-[#596a60]">பண்ணை எல்லைக்குள் கிடைத்த சமீபத்திய satellite + photo + weather evidence-ஐ எளிய முறையில் காட்டுகிறது.</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={reload} className="rounded-xl border-[#dfe9e2] bg-white" aria-label="Refresh risk map">
-              <RefreshCw className="mr-2 h-4 w-4" /> Refresh
+            <Button variant="outline" onClick={reload} disabled={refreshing} className="rounded-xl border-[#dfe9e2] bg-white" aria-label="Refresh risk map">
+              <RefreshCw className={`mr-2 h-4 w-4 ${refreshing ? "animate-spin" : ""}`} /> {refreshing ? "புதுப்பிக்கிறது" : "Refresh"}
             </Button>
-            <Button variant="outline" onClick={() => navigate("/inspect")} className="rounded-xl border-[#dfe9e2] bg-white">
-              <Camera className="mr-2 h-4 w-4" /> புதிய படம்
-            </Button>
+            <Button onClick={() => navigate("/inspect")} className="rounded-xl bg-[#146c43] hover:bg-[#0f5836]"><Camera className="mr-2 h-4 w-4" /> புதிய படம்</Button>
           </div>
         </header>
+
+        <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold text-[#718078]"><Ruler className="h-4 w-4 text-[#146c43]" /> பண்ணை பரப்பு</div><p className="mt-2 text-xl font-bold text-[#13271d]">{areaHa != null ? `${areaHa.toFixed(2)} ha` : "—"}</p><p className="text-[11px] text-[#718078]">{areaAcres != null ? `${areaAcres.toFixed(2)} acres` : "அளவு கிடைக்கவில்லை"}</p></div>
+          <div className="rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold text-[#718078]"><Satellite className="h-4 w-4 text-violet-600" /> Satellite observation</div><p className="mt-2 text-xl font-bold text-[#13271d]">{formatAge(satellite?.observation_age_hours)}</p><p className="text-[11px] text-[#718078]">{satellite?.image_count ?? 0} usable image(s)</p></div>
+          <div className="rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold text-[#718078]"><Layers3 className="h-4 w-4 text-emerald-600" /> Vegetation trend</div><p className={`mt-2 text-xl font-bold ${trend === "declining" ? "text-red-700" : trend === "improving" ? "text-emerald-700" : "text-[#13271d]"}`}>{trend === "declining" ? "குறைவு" : trend === "improving" ? "மேம்பாடு" : trend === "stable" ? "நிலையானது" : "தகவல் குறைவு"}</p><p className="text-[11px] text-[#718078]">NDVI baseline comparison</p></div>
+          <div className="rounded-2xl border border-[#dfe9e2] bg-white p-4 shadow-sm"><div className="flex items-center gap-2 text-xs font-semibold text-[#718078]"><ShieldCheck className="h-4 w-4 text-[#146c43]" /> Evidence confidence</div><p className="mt-2 text-xl font-bold text-[#13271d]">{confidence > 0 ? `${confidence}%` : "—"}</p><div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#e9f0eb]"><div className="h-full rounded-full bg-[#146c43] transition-all duration-700" style={{ width: `${Math.min(100, Math.max(0, confidence))}%` }} /></div></div>
+        </div>
 
         <div className="grid gap-5 lg:grid-cols-[1.35fr_0.65fr]">
           <section className="overflow-hidden rounded-[28px] border border-[#dfe9e2] bg-white shadow-sm">
             <div className="relative h-[460px] sm:h-[560px]">
               <MapContainer center={center} zoom={15} scrollWheelZoom className="h-full w-full">
-                <TileLayer
-                  attribution='&copy; OpenStreetMap contributors'
-                  url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-                />
+                <TileLayer attribution='&copy; OpenStreetMap contributors' url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
                 <MapRecenter center={center} />
-                {rings.map((ring, index) => (
-                  <Polygon
-                    key={index}
-                    positions={ring}
-                    pathOptions={{
-                      color: level === "high" ? "#b91c1c" : level === "moderate" ? "#b7791f" : "#15803d",
-                      fillColor: level === "high" ? "#ef4444" : level === "moderate" ? "#f59e0b" : "#22c55e",
-                      fillOpacity: 0.28,
-                      weight: 3,
-                    }}
-                  />
-                ))}
-                <CircleMarker
-                  center={center}
-                  radius={10}
-                  pathOptions={{ color: "#13271d", fillColor: "#ffffff", fillOpacity: 1, weight: 3 }}
-                />
+                {paths.map((path, index) => <Polygon key={index} positions={path} pathOptions={{ color: text.ring, fillColor: text.fill, fillOpacity: 0.25, weight: 3, dashArray: farmerConfirmedBoundary ? undefined : "8 8" }} />)}
+                <CircleMarker center={center} radius={9} pathOptions={{ color: "#13271d", fillColor: "#ffffff", fillOpacity: 1, weight: 3 }} />
               </MapContainer>
 
-              <div className="pointer-events-none absolute left-4 top-4 z-[500] max-w-[290px] rounded-2xl border border-white/80 bg-white/95 p-4 shadow-lg backdrop-blur">
-                <div className="flex items-center gap-2">
-                  <MapPinned className="h-5 w-5 text-[#146c43]" />
-                  <div>
-                    <p className="text-xs font-bold text-[#13271d]">தற்போதைய பண்ணை நிலை</p>
-                    <p className="text-[11px] text-[#718078]">Evidence-based screening</p>
-                  </div>
-                </div>
-                <div className={`mt-3 rounded-xl border px-3 py-2 ${text.className}`}>
-                  <p className="text-sm font-bold">{text.tamil}</p>
-                  <p className="text-xs">{score.toFixed(0)}/100</p>
-                </div>
+              <div className="pointer-events-none absolute left-4 top-4 z-[500] max-w-[310px] rounded-2xl border border-white/80 bg-white/95 p-4 shadow-lg backdrop-blur">
+                <div className="flex items-center gap-2"><MapPinned className="h-5 w-5 text-[#146c43]" /><div><p className="text-xs font-bold text-[#13271d]">பண்ணை எல்லை</p><p className="text-[11px] text-[#718078]">{farmerConfirmedBoundary ? "Farmer-confirmed boundary" : "Location buffer — boundary not confirmed"}</p></div></div>
+                <div className={`mt-3 rounded-xl border px-3 py-2 ${text.className}`}><p className="text-sm font-bold">{text.tamil}</p><p className="text-xs">Farm-level risk • {score.toFixed(0)}/100</p></div>
               </div>
 
-              <div className="absolute bottom-4 left-4 z-[500] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-lg">
+              <div className="absolute bottom-4 left-4 z-[500] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Map meaning</p>
-                <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-[#596a60]">
-                  <span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-emerald-500" /> குறைவு</span>
-                  <span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-amber-500" /> கவனம்</span>
-                  <span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-red-500" /> அதிகம்</span>
-                </div>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-[#596a60]"><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-emerald-500" /> குறைவு</span><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-amber-500" /> கவனம்</span><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-red-500" /> அதிகம்</span></div>
               </div>
             </div>
           </section>
 
           <aside className="space-y-4">
-            <section className={`rounded-[28px] border p-6 shadow-sm ${text.className}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="text-xs font-bold uppercase tracking-[0.12em]">இப்போது</p>
-                  <h2 className="mt-2 text-3xl font-bold">{text.tamil}</h2>
-                  <p className="mt-1 text-sm opacity-80">{text.title} • {score.toFixed(0)}/100</p>
-                </div>
-                {level === "high" ? <AlertTriangle className="h-9 w-9" /> : level === "moderate" ? <Wind className="h-9 w-9" /> : <ShieldCheck className="h-9 w-9" />}
-              </div>
+            <section className={`rounded-[28px] border p-6 shadow-sm transition-all duration-500 ${text.className}`}>
+              <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.12em]">இப்போது</p><h2 className="mt-2 text-3xl font-bold">{text.tamil}</h2><p className="mt-1 text-sm opacity-80">{text.title} • {score.toFixed(0)}/100</p></div>{level === "high" ? <AlertTriangle className="h-9 w-9 animate-pulse" /> : level === "moderate" ? <Wind className="h-9 w-9" /> : <ShieldCheck className="h-9 w-9" />}</div>
+              {satellite?.risk_score != null && <p className="mt-4 rounded-xl bg-white/50 p-3 text-xs leading-5">Satellite vegetation-stress signal: <b>{satellite.risk_score.toFixed(0)}/100</b>. இது நோய் உறுதி அல்ல; களச் சரிபார்ப்பு தேவை.</p>}
             </section>
 
             <section className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
               <h2 className="text-lg font-bold text-[#13271d]">என்ன செய்ய வேண்டும்?</h2>
-              <div className="mt-4 flex gap-3 rounded-2xl bg-[#f8fbf9] p-4">
-                <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#146c43]" />
-                <p className="text-sm leading-6 text-[#39483f]">{decision?.action ?? "முதலில் ஒரு தெளிவான வாழை இலை / செடி புகைப்படம் எடுத்து AI-யிடம் சரிபார்க்கவும்."}</p>
-              </div>
-              <Button onClick={speakSummary} className="mt-4 w-full rounded-xl bg-[#146c43] hover:bg-[#0f5836]">
-                {isSpeaking ? <Volume2 className="mr-2 h-4 w-4 animate-pulse" /> : <Mic className="mr-2 h-4 w-4" />}
-                {isSpeaking ? "கேளுங்கள்..." : "குரலில் கேட்க"}
-              </Button>
+              <div className="mt-4 flex gap-3 rounded-2xl bg-[#f8fbf9] p-4"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#146c43]" /><p className="text-sm leading-6 text-[#39483f]">{decision?.action ?? (trend === "declining" ? "தாவர வளர்ச்சி குறைவாக உள்ளது. ஒரு தெளிவான இலை / செடி புகைப்படம் எடுத்து களத்தில் சரிபார்க்கவும்." : "முதலில் ஒரு தெளிவான வாழை இலை / செடி புகைப்படம் எடுத்து AI-யிடம் சரிபார்க்கவும்.")}</p></div>
+              <Button onClick={speakSummary} className="mt-4 w-full rounded-xl bg-[#146c43] hover:bg-[#0f5836]">{isSpeaking ? <Volume2 className="mr-2 h-4 w-4 animate-pulse" /> : <Mic className="mr-2 h-4 w-4" />}{isSpeaking ? "கேளுங்கள்..." : "தமிழில் குரலில் கேட்க"}</Button>
             </section>
 
             <section className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-bold text-[#13271d]">ஆதாரம்</h2>
+              <h2 className="text-lg font-bold text-[#13271d]">ஆதார நிலை</h2>
               <div className="mt-3 space-y-2 text-sm">
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fbf9] p-3"><span className="flex items-center gap-2"><Camera className="h-4 w-4 text-[#146c43]" /> புகைப்படம்</span><b>{decision ? "உள்ளது" : "இல்லை"}</b></div>
                 <div className="flex items-center justify-between rounded-xl bg-[#f8fbf9] p-3"><span className="flex items-center gap-2"><CloudRain className="h-4 w-4 text-[#146c43]" /> வானிலை</span><b>{decision?.risk?.signals_used?.includes("weather") ? "உள்ளது" : "இல்லை"}</b></div>
-                <div className="flex items-center justify-between rounded-xl bg-[#f8fbf9] p-3"><span className="flex items-center gap-2"><Satellite className="h-4 w-4 text-[#146c43]" /> செயற்கைக்கோள்</span><b>{satelliteUsed ? "உள்ளது" : "இல்லை"}</b></div>
+                <div className="flex items-center justify-between rounded-xl bg-[#f8fbf9] p-3"><span className="flex items-center gap-2"><Satellite className="h-4 w-4 text-violet-600" /> செயற்கைக்கோள்</span><b>{satellite?.available && satelliteUsed ? "பயன்படுத்தப்பட்டது" : satellite?.available ? "கிடைத்தது" : "இல்லை"}</b></div>
               </div>
               <div className="mt-3 rounded-xl border border-[#dfe9e2] p-3 text-xs leading-5 text-[#596a60]">
-                {hasSatelliteConflict
-                  ? "பழைய satellite தகவல் தற்போதைய பயிருடன் முரண்பட்டதால், அதை ஆபத்து கணக்கில் நம்பகமான ஆதாரமாக பயன்படுத்தவில்லை."
-                  : satelliteUsed
-                    ? "Satellite தகவல் கிடைத்துள்ளது; அதன் freshness-ஐ கருத்தில் கொண்டு risk கணக்கிடப்படுகிறது."
-                    : "Satellite படம் இல்லை. அது இல்லாததால் AI எந்த தகவலையும் உருவாக்கவில்லை."}
+                {hasSatelliteConflict ? "பழைய satellite தகவல் தற்போதைய பயிருடன் முரண்பட்டதால், அதை risk கணக்கில் நம்பகமான ஆதாரமாக பயன்படுத்தவில்லை." : satellite?.available ? `சமீபத்திய satellite observation: ${formatAge(satellite.observation_age_hours)}. Cloud quality: ${satellite.cloud_percent_mean != null ? `${satellite.cloud_percent_mean.toFixed(0)}%` : "தகவல் இல்லை"}.` : "Satellite தகவல் இல்லை. Photo / weather evidence மட்டும் பயன்படுத்தப்பட்டிருக்கலாம்."}
               </div>
             </section>
 
             <section className="rounded-2xl border border-[#dfe9e2] bg-white p-4 text-xs leading-5 text-[#718078]">
-              <p className="font-bold text-[#596a60]">முக்கிய குறிப்பு</p>
-              <p className="mt-1">இந்த வரைபடம் முழு பண்ணைக்கான தற்போதைய evidence risk-ஐ காட்டுகிறது. ஒவ்வொரு மரத்திற்கும் தனித்தனி ஆபத்து என்று பொருள் இல்லை. உண்மையான zone-level signal கிடைத்தால் மட்டுமே தனி பகுதி நிறம் மாற்றப்படும்.</p>
-              {confidence > 0 && <p className="mt-2">ஆதார நம்பகத்தன்மை: {confidence}%</p>}
+              <div className="flex items-center gap-2 font-bold text-[#596a60]"><Clock3 className="h-4 w-4" /> Satellite freshness</div>
+              <p className="mt-1">Sentinel-2 என்பது periodic observation. இது live camera அல்ல. ஒவ்வொரு மரத்திற்கும் தனித்தனி risk என்று இந்த map காட்டாது.</p>
+              {satellite?.resolution_m && <p className="mt-1">Analysis resolution: approximately {satellite.resolution_m} m.</p>}
+              {satellite?.warnings?.[0] && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-amber-800">{satellite.warnings[0]}</p>}
             </section>
           </aside>
         </div>
 
-        {!decision && (
-          <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
-            முதலில் ஒரு புகைப்படத்தை AI மூலம் சரிபார்க்கவும். அதன் பிறகு இந்த வரைபடம் உங்கள் சமீபத்திய முடிவை காட்டும்.
-          </div>
-        )}
+        {!decision && <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">முதலில் ஒரு புகைப்படத்தை AI மூலம் சரிபார்க்கவும். அதன் பிறகு இந்த map உங்கள் சமீபத்திய evidence முடிவை காட்டும்.</div>}
 
-        <div className="mt-5 flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => navigate("/dashboard")} className="rounded-xl bg-white"><ArrowLeft className="mr-2 h-4 w-4" /> Dashboard</Button>
-          <Button variant="outline" onClick={() => navigate("/risk")} className="rounded-xl bg-white">வானிலை ஆபத்து</Button>
-        </div>
+        <div className="mt-5 flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate("/dashboard")} className="rounded-xl bg-white"><ArrowLeft className="mr-2 h-4 w-4" /> Dashboard</Button><Button variant="outline" onClick={() => navigate("/risk")} className="rounded-xl bg-white">வானிலை ஆபத்து</Button></div>
       </div>
     </div>
   );
