@@ -93,7 +93,15 @@ export async function reinspectAfterFeedback(
     body: JSON.stringify(payload),
   });
   if (!response.ok) throw await parseError(response, "Unable to inspect the new crop photo.");
-  return response.json();
+
+  const result = (await response.json()) as ReinspectionResponse;
+  const nextStep = result.next_action.trim();
+  const reason = result.next_reason.trim();
+  const actionMessage = nextStep
+    ? `${result.farmer_message} ${nextStep}${reason ? ` — ${reason}` : ""}`.trim()
+    : result.farmer_message;
+
+  return { ...result, farmer_message: actionMessage };
 }
 
 export function saveLatestAgentLoop(loop: unknown): void {
