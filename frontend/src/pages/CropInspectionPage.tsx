@@ -126,6 +126,12 @@ export default function CropInspectionPage() {
         satellite = { available: false, reason: "Farm location is unavailable. Confirm the farm location before using satellite evidence." };
       }
       setSatelliteEvidence(satellite);
+      try {
+        localStorage.setItem("vazhaiguard_last_satellite_evidence", JSON.stringify(satellite));
+        localStorage.setItem("vazhaiguard_last_satellite_evidence_at", new Date().toISOString());
+      } catch (storageError) {
+        console.warn("Could not persist the latest satellite evidence.", storageError);
+      }
 
       const decision = await inspectAndDecide({
         imageDataUrl,
