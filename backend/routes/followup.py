@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+from math import isfinite
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, HTTPException
@@ -47,11 +48,15 @@ class ReinspectionResponse(BaseModel):
     current_risk_level: str
     previous_risk_score: Optional[float]
     risk_delta: Optional[float]
-    trend: str
+    trend: Literal["improving", "worsening", "stable", "baseline"]
     visual_confidence: Optional[float] = None
     needs_field_verification: bool
     farmer_message: str
     next_state: str
+    next_action: str
+    next_reason: str
+    follow_up_check: str
+    recheck_after: str
     signals_used: list[str]
     model: Optional[str] = None
     recorded_at: str
@@ -83,7 +88,7 @@ def _data_url(request: ReinspectionRequest) -> str | None:
 
 
 def _trend(previous: float | None, current: float) -> str:
-    if previous is None:
+    if previous is None or not isfinite(previous) or not isfinite(current):
         return "baseline"
     delta = current - previous
     if delta <= -8:
@@ -91,6 +96,28 @@ def _trend(previous: float | None, current: float) -> str:
     if delta >= 8:
         return "worsening"
     return "stable"
+
+
+def _decision_action(decision: dict[str, Any], tamil: bool) -> tuple[str, str]:
+    actions = decision.get("priority_actions")
+    if isinstance(actions, list) and actions:
+        first = actions[0]
+        if isinstance(first, dict):
+            action = str(first.get("action", "")).strip()
+            reason = str(first.get("reason", "")).strip()
+            if action:
+                return action, reason
+
+    action = str(decision.get("action", "")).strip()
+    if action:
+        return action, str(decision.get("reason", "")).strip()
+
+    fallback = (
+        "புதிய படத்தின் அடிப்படையில் அடுத்த நிலையை கவனித்து, தேவையான களச் சரிபார்ப்பை செய்யுங்கள்."
+        if tamil
+        else "Review the new photo result and complete the suggested field verification if needed."
+    )
+    return fallback, ""
 
 
 @router.post("/feedback", response_model=ActionFeedbackResponse)
@@ -121,6 +148,9 @@ def reinspect_after_feedback(request: ReinspectionRequest):
 
     try:
         image_bytes, content_type = decode_data_url(data_url)
+        if not content_type.lower().startswith("image/"):
+            raise ValueError("The reinspection file must be an image.")
+
         vision = analyze_crop_image(
             image_bytes=image_bytes,
             content_type=content_type,
@@ -128,7 +158,7 @@ def reinspect_after_feedback(request: ReinspectionRequest):
             farm_context=request.farm_context,
             weather_context=request.weather_context,
         )
-        score, label, signal_scores, signals_used, _weights = _fuse_signals(
+        score, label, _signal_scores, signals_used, _weights = _fuse_signals(
             vision,
             request.weather_context,
             request.satellite_context,
@@ -142,8 +172,10 @@ def reinspect_after_feedback(request: ReinspectionRequest):
             label=label,
             language=request.language,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=503, detail="Reinspection could not be completed: " + str(exc)) from exc
+        raise HTTPException(status_code=503, detail="Reinspection is temporarily unavailable. Please try again.") from exc
 
     delta = None if request.previous_risk_score is None else round(score - request.previous_risk_score, 1)
     trend = _trend(request.previous_risk_score, score)
@@ -163,6 +195,9 @@ def reinspect_after_feedback(request: ReinspectionRequest):
     }
     combined_message = f"{trend_text[trend]} {farmer_message}".strip()
     needs_verification = bool(decision.get("needs_field_verification", vision.get("needs_field_verification", True)))
+    next_action, next_reason = _decision_action(decision, tamil)
+    follow_up_check = str(decision.get("follow_up_check", "")).strip()
+    recheck_after = str(decision.get("recheck_after", "")).strip()
 
     return ReinspectionResponse(
         success=True,
@@ -176,6 +211,10 @@ def reinspect_after_feedback(request: ReinspectionRequest):
         needs_field_verification=needs_verification,
         farmer_message=combined_message,
         next_state="field_verification" if needs_verification else "wait_for_farmer",
+        next_action=next_action,
+        next_reason=next_reason,
+        follow_up_check=follow_up_check,
+        recheck_after=recheck_after,
         signals_used=signals_used,
         model=vision.get("model"),
         recorded_at=datetime.now(timezone.utc).isoformat(),

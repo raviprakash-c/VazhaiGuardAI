@@ -75,6 +75,10 @@ export interface ReinspectionResponse {
   needs_field_verification: boolean;
   farmer_message: string;
   next_state: string;
+  next_action: string;
+  next_reason: string;
+  follow_up_check: string;
+  recheck_after: string;
   signals_used: string[];
   model?: string | null;
   recorded_at: string;
