@@ -11,6 +11,7 @@ from routes.bedrock import router as bedrock_router
 from routes.multimodal import router as multimodal_router
 from routes.evidence import router as evidence_router
 from routes.followup import router as followup_router
+from routes.satellite import router as satellite_router
 from voice_registration import router as voice_registration_router
 from agents.orchestrator import router as orchestrator_router
 from weather import router as weather_router
@@ -18,11 +19,11 @@ from weather import router as weather_router
 
 app = FastAPI(
     title="VazhaiGuardAI",
-    version="2.4.0",
+    version="2.5.0",
     description=(
         "AI-powered banana farm intelligence platform with AWS Bedrock farmer copilot, "
         "multimodal crop inspection, temporal evidence monitoring, unified risk fusion, "
-        "and an agentic farmer action follow-up loop"
+        "real Google Earth Engine satellite evidence, and an agentic farmer action follow-up loop"
     ),
 )
 
@@ -69,6 +70,7 @@ app.include_router(weather_router)
 app.include_router(bedrock_router)
 app.include_router(multimodal_router)
 app.include_router(evidence_router)
+app.include_router(satellite_router)
 
 
 @app.get("/")
@@ -76,14 +78,14 @@ def root():
     return {
         "status": "online",
         "service": "VazhaiGuardAI",
-        "version": "2.4.0",
+        "version": "2.5.0",
         "capabilities": [
             "farmer-voice-copilot",
             "weather-decision-engine",
             "multimodal-crop-inspection",
             "risk-fusion",
             "temporal-evidence-monitor",
-            "satellite-freshness-and-conflict-detection",
+            "satellite-evidence-sentinel2-dynamicworld",
             "agentic-action-follow-up",
         ],
     }
@@ -97,5 +99,6 @@ def health():
         "bedrock_text_model": "mistral.ministral-3-8b-instruct",
         "multimodal": "enabled",
         "evidence_monitor": "enabled",
+        "satellite_evidence": "earth-engine",
         "agentic_follow_up": "enabled",
     }
