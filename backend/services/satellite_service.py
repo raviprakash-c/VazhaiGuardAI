@@ -48,23 +48,43 @@ def _geometry_from_request(
     latitude: float,
     longitude: float,
     boundary: dict[str, Any] | None,
-) -> Any:
+) -> tuple[Any, str, dict[str, Any] | None]:
+    """Build the analysis geometry without pretending a point buffer is a legal parcel."""
     if boundary:
+        boundary_type = boundary.get("type")
         geometry = boundary
-        if boundary.get("type") == "Feature":
+        if boundary_type == "Feature":
             geometry = boundary.get("geometry")
-        elif boundary.get("type") == "FeatureCollection":
+        elif boundary_type == "FeatureCollection":
             features = boundary.get("features") or []
-            if len(features) == 1:
-                geometry = features[0].get("geometry")
+            if features:
+                return (
+                    ee.FeatureCollection(features).geometry(),
+                    "farmer-confirmed FeatureCollection boundary",
+                    boundary,
+                )
 
         if isinstance(geometry, dict) and geometry.get("type") in {"Polygon", "MultiPolygon"}:
             coordinates = geometry.get("coordinates")
             if coordinates:
-                return ee.Geometry(geometry)
+                return (
+                    ee.Geometry(geometry),
+                    f"farmer-confirmed {geometry['type']} boundary",
+                    boundary,
+                )
 
-    # Location-only fallback is deliberately a small buffer, not a fabricated legal parcel.
-    return ee.Geometry.Point([longitude, latitude]).buffer(60)
+    return (
+        ee.Geometry.Point([longitude, latitude]).buffer(60),
+        "60 m farm-location buffer",
+        None,
+    )
+
+
+def _mask_sentinel_clouds(image: Any) -> Any:
+    """Mask cloud/shadow/snow classes using Sentinel-2 Scene Classification Layer."""
+    scl = image.select("SCL")
+    clear = scl.neq(3).And(scl.neq(8)).And(scl.neq(9)).And(scl.neq(10)).And(scl.neq(11))
+    return image.updateMask(clear)
 
 
 def _ndvi(image: Any) -> Any:
@@ -79,28 +99,17 @@ def _ndwi(image: Any) -> Any:
     return image.normalizedDifference(["B3", "B8"]).rename("ndwi")
 
 
-def _sentinel_collection(
-    ee: Any,
-    geometry: Any,
-    start: datetime,
-    end: datetime,
-    cloud_limit: float,
-) -> Any:
+def _sentinel_collection(ee: Any, geometry: Any, start: datetime, end: datetime, cloud_limit: float) -> Any:
     return (
         ee.ImageCollection(SENTINEL2_COLLECTION)
         .filterBounds(geometry)
         .filterDate(start.strftime("%Y-%m-%d"), end.strftime("%Y-%m-%d"))
         .filter(ee.Filter.lte("CLOUDY_PIXEL_PERCENTAGE", cloud_limit))
+        .map(_mask_sentinel_clouds)
     )
 
 
-def _analyze_window(
-    ee: Any,
-    geometry: Any,
-    start: datetime,
-    end: datetime,
-    cloud_limit: float,
-) -> dict[str, Any] | None:
+def _analyze_window(ee: Any, geometry: Any, start: datetime, end: datetime, cloud_limit: float) -> dict[str, Any] | None:
     collection = _sentinel_collection(ee, geometry, start, end, cloud_limit)
     count = int(collection.size().getInfo())
     if count == 0:
@@ -118,19 +127,14 @@ def _analyze_window(
 
     latest = collection.sort("system:time_start", False).first()
     timestamp_ms = latest.get("system:time_start").getInfo()
-    latest_observation = datetime.fromtimestamp(
-        timestamp_ms / 1000,
-        tz=timezone.utc,
-    ).isoformat()
+    latest_observation = datetime.fromtimestamp(timestamp_ms / 1000, tz=timezone.utc).isoformat()
 
     return {
         "image_count": count,
         "ndvi": _safe_number(values.get("ndvi")),
         "ndre": _safe_number(values.get("ndre")),
         "ndwi": _safe_number(values.get("ndwi")),
-        "cloud_percent_mean": _safe_number(
-            collection.aggregate_mean("CLOUDY_PIXEL_PERCENTAGE").getInfo()
-        ),
+        "cloud_percent_mean": _safe_number(collection.aggregate_mean("CLOUDY_PIXEL_PERCENTAGE").getInfo()),
         "latest_observation": latest_observation,
     }
 
@@ -160,16 +164,10 @@ def _dynamic_world(ee: Any, geometry: Any, start: datetime, end: datetime) -> di
     }
 
 
-def _satellite_stress(
-    ndvi: float | None,
-    ndre: float | None,
-    ndwi: float | None,
-    crop_probability: float | None,
-) -> tuple[float | None, float | None]:
+def _satellite_stress(ndvi: float | None, ndre: float | None, ndwi: float | None, crop_probability: float | None) -> tuple[float | None, float | None]:
     if ndvi is None:
         return None, None
 
-    # This is a vegetation-stress heuristic, not a disease classifier.
     vegetation_stress = _clamp((0.70 - ndvi) / 0.45)
     red_edge_stress = _clamp((0.42 - (ndre if ndre is not None else 0.42)) / 0.30)
     water_stress = _clamp((0.10 - (ndwi if ndwi is not None else 0.10)) / 0.35)
@@ -178,6 +176,19 @@ def _satellite_stress(
     crop_factor = _clamp(crop_probability if crop_probability is not None else 0.5, 0.35, 1.0)
     confidence = _clamp((0.45 + 0.55 * crop_factor) * (1.0 - 0.35 * vegetation_stress))
     return round(raw * 100, 1), round(confidence, 3)
+
+
+def _boundary_summary(ee: Any, geometry: Any, source: str, boundary: dict[str, Any] | None) -> dict[str, Any]:
+    area_m2 = _safe_number(geometry.area(maxError=1).getInfo())
+    area_ha = round(area_m2 / 10_000, 4) if area_m2 is not None else None
+    return {
+        "source": source,
+        "is_farmer_confirmed": boundary is not None,
+        "geometry_type": boundary.get("type") if boundary else "PointBuffer",
+        "area_m2": round(area_m2, 2) if area_m2 is not None else None,
+        "area_hectares": area_ha,
+        "area_acres": round(area_ha * 2.47105381, 4) if area_ha is not None else None,
+    }
 
 
 def analyze_satellite_evidence(
@@ -200,7 +211,8 @@ def analyze_satellite_evidence(
         raise ValueError("max_cloud_percent must be between 0 and 100.")
 
     ee = _initialize_earth_engine()
-    geometry = _geometry_from_request(ee, latitude, longitude, boundary)
+    geometry, analysis_scope, normalized_boundary = _geometry_from_request(ee, latitude, longitude, boundary)
+    farm_geometry = _boundary_summary(ee, geometry, analysis_scope, normalized_boundary)
     now = datetime.now(timezone.utc)
     recent_start = now - timedelta(days=lookback_days)
     baseline_start = recent_start - timedelta(days=baseline_days)
@@ -213,7 +225,8 @@ def analyze_satellite_evidence(
             "available": False,
             "provider": "Google Earth Engine",
             "source": "Sentinel-2 SR Harmonized + Dynamic World",
-            "analysis_scope": "farmer-confirmed farm boundary" if boundary else "60 m farm-location buffer",
+            "analysis_scope": analysis_scope,
+            "farm_geometry": farm_geometry,
             "reason": "No Sentinel-2 observations passed the date and cloud filters.",
             "warnings": ["Try a longer lookback window or a higher cloud threshold."],
         }
@@ -221,11 +234,7 @@ def analyze_satellite_evidence(
     dynamic_world = _dynamic_world(ee, geometry, recent_start, now)
     ndvi = recent.get("ndvi")
     baseline_ndvi = baseline.get("ndvi") if baseline else None
-    ndvi_trend = (
-        round(ndvi - baseline_ndvi, 4)
-        if ndvi is not None and baseline_ndvi is not None
-        else None
-    )
+    ndvi_trend = round(ndvi - baseline_ndvi, 4) if ndvi is not None and baseline_ndvi is not None else None
 
     if ndvi_trend is None:
         trend = "insufficient_history"
@@ -236,19 +245,10 @@ def analyze_satellite_evidence(
     else:
         trend = "stable"
 
-    risk_score, confidence = _satellite_stress(
-        ndvi,
-        recent.get("ndre"),
-        recent.get("ndwi"),
-        dynamic_world.get("crop_probability"),
-    )
-
+    risk_score, confidence = _satellite_stress(ndvi, recent.get("ndre"), recent.get("ndwi"), dynamic_world.get("crop_probability"))
     latest_observation = recent["latest_observation"]
     observed_at = datetime.fromisoformat(latest_observation)
-    observation_age_hours = round(
-        max(0.0, (now - observed_at).total_seconds() / 3600),
-        1,
-    )
+    observation_age_hours = round(max(0.0, (now - observed_at).total_seconds() / 3600), 1)
 
     crop_probability = dynamic_world.get("crop_probability")
     warnings = [
@@ -262,7 +262,6 @@ def analyze_satellite_evidence(
     if crop_probability is not None and crop_probability < 0.5:
         warnings.append("Dynamic World crop probability is below 0.50; cropland classification is uncertain.")
 
-    # Coarse crop-state context is intentionally descriptive; it is not a plant count.
     if crop_probability is not None and crop_probability < 0.20 and (ndvi or 0) < 0.25:
         crop_state = "bare_or_low_vegetation"
     elif crop_probability is not None and crop_probability >= 0.50:
@@ -274,11 +273,9 @@ def analyze_satellite_evidence(
         "available": True,
         "provider": "Google Earth Engine",
         "source": "Sentinel-2 SR Harmonized + Dynamic World",
-        "datasets": {
-            "sentinel2": SENTINEL2_COLLECTION,
-            "dynamic_world": DYNAMIC_WORLD_COLLECTION,
-        },
-        "analysis_scope": "farmer-confirmed farm boundary" if boundary else "60 m farm-location buffer",
+        "datasets": {"sentinel2": SENTINEL2_COLLECTION, "dynamic_world": DYNAMIC_WORLD_COLLECTION},
+        "analysis_scope": analysis_scope,
+        "farm_geometry": farm_geometry,
         "resolution_m": 10,
         "latest_observation": latest_observation,
         "observed_at": latest_observation,
