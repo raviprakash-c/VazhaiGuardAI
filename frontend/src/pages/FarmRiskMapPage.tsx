@@ -9,7 +9,6 @@ import {
   CloudRain,
   Layers3,
   MapPinned,
-  Mic,
   RefreshCw,
   Ruler,
   Satellite,
@@ -198,35 +197,31 @@ export default function FarmRiskMapPage() {
 
           <aside className="space-y-4">
             <div className={`rounded-[24px] border p-5 shadow-sm ${text.className}`}>
-              <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.12em] opacity-70">Farm risk</p><h2 className="mt-1 text-2xl font-bold">{text.tamil}</h2></div><div className="rounded-full bg-white/70 px-3 py-1 text-sm font-bold">{score.toFixed(0)}/100</div></div>
-              <p className="mt-3 text-sm leading-6">{decision?.action || "புதிய படம் எடுத்து கள நிலையை சரிபார்க்கவும்."}</p>
-              <Button onClick={speakSummary} disabled={isSpeaking} variant="outline" className="mt-4 w-full rounded-xl border-current bg-white/70"><Volume2 className="mr-2 h-4 w-4" /> {isSpeaking ? "கேட்கிறது…" : "தமிழில் கேளுங்கள்"}</Button>
+              <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.12em] opacity-70">Farm risk</p><h2 className="mt-1 text-2xl font-bold">{text.title}</h2><p className="mt-1 text-sm font-semibold">{text.tamil}</p></div><div className="rounded-full bg-white/70 px-3 py-1 text-sm font-bold">{score.toFixed(0)}/100</div></div>
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10"><div className="h-full rounded-full bg-current transition-all duration-700" style={{ width: `${Math.min(100, Math.max(0, score))}%` }} /></div>
             </div>
 
             <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
-              <div className="flex items-center justify-between"><h3 className="font-bold text-[#13271d]">Evidence status</h3><CheckCircle2 className="h-5 w-5 text-[#146c43]" /></div>
-              <div className="mt-4 space-y-3 text-sm">
-                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Satellite className="h-4 w-4" /> Satellite</span><span className="font-semibold">{satelliteUsed ? "Used" : "Available"}</span></div>
-                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><CloudRain className="h-4 w-4" /> Weather</span><span className="font-semibold">{decision?.risk?.signals_used?.includes("weather") ? "Used" : "Not available"}</span></div>
-                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Camera className="h-4 w-4" /> Farmer photo</span><span className="font-semibold">{decision?.vision?.observation ? "Used" : "Not available"}</span></div>
-                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Clock3 className="h-4 w-4" /> Observation</span><span className="font-semibold">{formatAge(satellite?.observation_age_hours)}</span></div>
-              </div>
-              {hasSatelliteConflict && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" /> Satellite and recent crop evidence disagree. Field verification is recommended.</div>}
+              <div className="flex items-center gap-2"><Satellite className="h-5 w-5 text-violet-600" /><h3 className="font-bold text-[#13271d]">Satellite evidence</h3></div>
+              <div className="mt-4 grid grid-cols-2 gap-3 text-sm"><div className="rounded-xl bg-[#f5fbf7] p-3"><p className="text-[11px] text-[#718078]">NDVI</p><p className="mt-1 font-bold text-[#13271d]">{satellite?.ndvi != null ? satellite.ndvi.toFixed(3) : "—"}</p></div><div className="rounded-xl bg-[#f5fbf7] p-3"><p className="text-[11px] text-[#718078]">NDRE</p><p className="mt-1 font-bold text-[#13271d]">{satellite?.ndre != null ? satellite.ndre.toFixed(3) : "—"}</p></div><div className="rounded-xl bg-[#f5fbf7] p-3"><p className="text-[11px] text-[#718078]">NDWI</p><p className="mt-1 font-bold text-[#13271d]">{satellite?.ndwi != null ? satellite.ndwi.toFixed(3) : "—"}</p></div><div className="rounded-xl bg-[#f5fbf7] p-3"><p className="text-[11px] text-[#718078]">Cloud</p><p className="mt-1 font-bold text-[#13271d]">{satellite?.cloud_percent != null ? `${satellite.cloud_percent.toFixed(1)}%` : "—"}</p></div></div>
+              <p className="mt-4 text-xs leading-5 text-[#718078]">Satellite evidence describes vegetation conditions across the farm. It does not identify individual banana trees or prove a disease diagnosis.</p>
+              {hasSatelliteConflict && <div className="mt-3 flex gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> Satellite and temporal crop evidence disagree; field verification is recommended.</div>}
             </div>
 
             <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
-              <h3 className="font-bold text-[#13271d]">அடுத்து என்ன செய்ய வேண்டும்?</h3>
-              <p className="mt-2 text-sm leading-6 text-[#596a60]">{decision?.action || "தோட்டத்தில் பாதிக்கப்பட்ட பகுதியின் புதிய புகைப்படத்தை எடுக்கவும்."}</p>
-              <div className="mt-4 grid gap-2">
-                <Button onClick={() => navigate("/inspect")} className="rounded-xl bg-[#146c43] hover:bg-[#0f5836]"><Camera className="mr-2 h-4 w-4" /> மீண்டும் படம் எடுக்கவும்</Button>
-                <Button onClick={() => navigate(-1)} variant="outline" className="rounded-xl"><ArrowLeft className="mr-2 h-4 w-4" /> பின்செல்லவும்</Button>
-              </div>
+              <div className="flex items-center justify-between"><div className="flex items-center gap-2"><CheckCircle2 className="h-5 w-5 text-[#146c43]" /><h3 className="font-bold text-[#13271d]">Evidence sources</h3></div><span className="text-xs font-bold text-[#146c43]">{confidence}%</span></div>
+              <div className="mt-4 space-y-3 text-sm"><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Camera className="h-4 w-4" /> Farmer photo</span><span className="font-semibold">{decision?.vision?.observation ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><CloudRain className="h-4 w-4" /> Weather</span><span className="font-semibold">{satelliteUsed ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Satellite className="h-4 w-4" /> Satellite</span><span className="font-semibold">{satelliteUsed || satellite ? "✓" : "—"}</span></div><div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Wind className="h-4 w-4" /> Storm context</span><span className="font-semibold">{satellite?.storm_risk != null ? "✓" : "—"}</span></div></div>
             </div>
 
-            <div className="rounded-[24px] border border-sky-100 bg-sky-50 p-5 text-sm text-sky-900"><div className="flex items-center gap-2 font-bold"><Wind className="h-4 w-4" /> Satellite ≠ live camera</div><p className="mt-2 leading-6">Satellite observation கால இடைவெளியுடன் கிடைக்கும். இது தோட்டத்தின் vegetation pattern-ஐ காட்டுகிறது; ஒரு தனி வாழை மரத்தின் நோயை உறுதி செய்யாது.</p></div>
-            <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 text-xs leading-5 text-[#718078]">{farmerConfirmedBoundary ? "இந்த வரைபடத்தின் எல்லை நீங்கள் உறுதிப்படுத்திய farm boundary-ஐ அடிப்படையாகக் கொண்டது." : "Farm boundary உறுதி செய்யப்படவில்லை; வரைபடம் location buffer-ஐ மட்டும் காட்டுகிறது."} {satellite?.farm_geometry?.area_m2 != null ? `பரப்பு: ${satellite.farm_geometry.area_m2.toFixed(0)} m².` : ""}</div>
+            <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-2"><Volume2 className="h-5 w-5 text-[#146c43]" /><h3 className="font-bold text-[#13271d]">Farmer action</h3></div>
+              <p className="mt-3 text-sm leading-6 text-[#405148]">{decision?.action || "புதிய படம் எடுத்து களத்தில் மீண்டும் சரிபார்க்கவும்."}</p>
+              <div className="mt-4 flex gap-2"><Button onClick={speakSummary} disabled={isSpeaking} variant="outline" className="flex-1 rounded-xl border-[#dfe9e2] bg-white"><Volume2 className="mr-2 h-4 w-4" /> {isSpeaking ? "பேசுகிறது…" : "தமிழில் கேளுங்கள்"}</Button><Button onClick={() => navigate("/inspect")} className="flex-1 rounded-xl bg-[#146c43] hover:bg-[#0f5836]"><Camera className="mr-2 h-4 w-4" /> படம் எடுக்க</Button></div>
+            </div>
           </aside>
         </div>
+
+        <div className="mt-5 flex items-center justify-between rounded-2xl border border-[#dfe9e2] bg-white px-4 py-3 text-xs text-[#718078] shadow-sm"><span className="flex items-center gap-2"><Clock3 className="h-4 w-4" /> {satellite?.observation_age_hours != null ? `Satellite observation: ${formatAge(satellite.observation_age_hours)}` : "Satellite observation timing unavailable"}</span><Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="rounded-lg"><ArrowLeft className="mr-1 h-4 w-4" /> Back</Button></div>
       </div>
     </div>
   );
