@@ -7,8 +7,28 @@ interface ChatMessageProps {
   isSpeaking?: boolean;
 }
 
+/**
+ * Model responses can occasionally be encoded more than once, for example
+ * `&amp;#xBA4;` instead of the Tamil character itself. Decode repeatedly so
+ * the farmer sees real Tamil Unicode rather than HTML entity text.
+ */
+function decodeHtmlEntities(text: string): string {
+  if (!text || typeof document === "undefined") return text;
+
+  let decoded = text;
+  for (let pass = 0; pass < 3; pass += 1) {
+    const textarea = document.createElement("textarea");
+    textarea.innerHTML = decoded;
+    const next = textarea.value;
+    if (next === decoded) break;
+    decoded = next;
+  }
+
+  return decoded;
+}
+
 function cleanInline(text: string): string {
-  return text
+  return decodeHtmlEntities(text)
     .replace(/\[([^\]]+)\]\(https?:\/\/[^)]+\)/g, "$1")
     .replace(/https?:\/\/\S+/g, "")
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -19,7 +39,7 @@ function cleanInline(text: string): string {
 }
 
 function renderText(text: string) {
-  const lines = text.replace(/\r/g, "").split("\n");
+  const lines = decodeHtmlEntities(text).replace(/\r/g, "").split("\n");
 
   return (
     <div className="space-y-2">
@@ -46,7 +66,9 @@ function renderText(text: string) {
         if (numbered) {
           return (
             <div key={index} className="flex gap-2">
-              <span className="font-semibold opacity-80">{trimmed.slice(0, trimmed.indexOf(content))}</span>
+              <span className="font-semibold opacity-80">
+                {trimmed.slice(0, trimmed.indexOf(content))}
+              </span>
               <span>{content}</span>
             </div>
           );
