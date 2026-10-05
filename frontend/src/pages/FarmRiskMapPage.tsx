@@ -29,6 +29,7 @@ import type { SatelliteEvidence } from "../services/satelliteApi";
 
 const DEFAULT_CENTER: LatLngExpression = [9.5, 77.5];
 type RiskLevel = "low" | "moderate" | "high";
+type Coordinate = [number, number];
 
 type SavedDecision = {
   risk?: {
@@ -78,12 +79,12 @@ function polygonPaths(boundary: SavedFarm["boundary"]): LatLngExpression[][] {
   const geometry = boundaryGeometry(boundary);
   if (!geometry?.coordinates) return [];
   if (geometry.type === "Polygon") {
-    const rings = geometry.coordinates as number[][][][];
-    return rings.slice(0, 1).map((ring) => ring.map(([lng, lat]) => [lat, lng] as LatLngExpression));
+    const rings = geometry.coordinates as Coordinate[][];
+    return rings.slice(0, 1).map((ring) => ring.map(([lng, lat]) => [lat, lng] as Coordinate));
   }
   if (geometry.type === "MultiPolygon") {
-    const polygons = geometry.coordinates as number[][][][][];
-    return polygons.map((polygon) => polygon[0]?.map(([lng, lat]) => [lat, lng] as LatLngExpression)).filter(Boolean) as LatLngExpression[][];
+    const polygons = geometry.coordinates as Coordinate[][][];
+    return polygons.map((polygon) => polygon[0]?.map(([lng, lat]) => [lat, lng] as Coordinate)).filter((path): path is Coordinate[] => Boolean(path));
   }
   return [];
 }
@@ -190,47 +191,42 @@ export default function FarmRiskMapPage() {
 
               <div className="absolute bottom-4 left-4 z-[500] rounded-2xl border border-white/80 bg-white/95 p-3 shadow-lg backdrop-blur">
                 <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Map meaning</p>
-                <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-[#596a60]"><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-emerald-500" /> குறைவு</span><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-amber-500" /> கவனம்</span><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-red-500" /> அதிகம்</span></div>
+                <div className="mt-2 flex flex-wrap gap-3 text-xs font-semibold text-[#596a60]"><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-emerald-500" /> healthy</span><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-amber-500" /> watch</span><span><i className="mr-1 inline-block h-3 w-3 rounded-full bg-red-500" /> act soon</span></div>
               </div>
             </div>
           </section>
 
           <aside className="space-y-4">
-            <section className={`rounded-[28px] border p-6 shadow-sm transition-all duration-500 ${text.className}`}>
-              <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.12em]">இப்போது</p><h2 className="mt-2 text-3xl font-bold">{text.tamil}</h2><p className="mt-1 text-sm opacity-80">{text.title} • {score.toFixed(0)}/100</p></div>{level === "high" ? <AlertTriangle className="h-9 w-9 animate-pulse" /> : level === "moderate" ? <Wind className="h-9 w-9" /> : <ShieldCheck className="h-9 w-9" />}</div>
-              {satellite?.risk_score != null && <p className="mt-4 rounded-xl bg-white/50 p-3 text-xs leading-5">Satellite vegetation-stress signal: <b>{satellite.risk_score.toFixed(0)}/100</b>. இது நோய் உறுதி அல்ல; களச் சரிபார்ப்பு தேவை.</p>}
-            </section>
+            <div className={`rounded-[24px] border p-5 shadow-sm ${text.className}`}>
+              <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase tracking-[0.12em] opacity-70">Farm risk</p><h2 className="mt-1 text-2xl font-bold">{text.tamil}</h2></div><div className="rounded-full bg-white/70 px-3 py-1 text-sm font-bold">{score.toFixed(0)}/100</div></div>
+              <p className="mt-3 text-sm leading-6">{decision?.action || "புதிய படம் எடுத்து கள நிலையை சரிபார்க்கவும்."}</p>
+              <Button onClick={speakSummary} disabled={isSpeaking} variant="outline" className="mt-4 w-full rounded-xl border-current bg-white/70"><Volume2 className="mr-2 h-4 w-4" /> {isSpeaking ? "கேட்கிறது…" : "தமிழில் கேளுங்கள்"}</Button>
+            </div>
 
-            <section className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-bold text-[#13271d]">என்ன செய்ய வேண்டும்?</h2>
-              <div className="mt-4 flex gap-3 rounded-2xl bg-[#f8fbf9] p-4"><CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-[#146c43]" /><p className="text-sm leading-6 text-[#39483f]">{decision?.action ?? (trend === "declining" ? "தாவர வளர்ச்சி குறைவாக உள்ளது. ஒரு தெளிவான இலை / செடி புகைப்படம் எடுத்து களத்தில் சரிபார்க்கவும்." : "முதலில் ஒரு தெளிவான வாழை இலை / செடி புகைப்படம் எடுத்து AI-யிடம் சரிபார்க்கவும்.")}</p></div>
-              <Button onClick={speakSummary} className="mt-4 w-full rounded-xl bg-[#146c43] hover:bg-[#0f5836]">{isSpeaking ? <Volume2 className="mr-2 h-4 w-4 animate-pulse" /> : <Mic className="mr-2 h-4 w-4" />}{isSpeaking ? "கேளுங்கள்..." : "தமிழில் குரலில் கேட்க"}</Button>
-            </section>
-
-            <section className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
-              <h2 className="text-lg font-bold text-[#13271d]">ஆதார நிலை</h2>
-              <div className="mt-3 space-y-2 text-sm">
-                <div className="flex items-center justify-between rounded-xl bg-[#f8fbf9] p-3"><span className="flex items-center gap-2"><Camera className="h-4 w-4 text-[#146c43]" /> புகைப்படம்</span><b>{decision ? "உள்ளது" : "இல்லை"}</b></div>
-                <div className="flex items-center justify-between rounded-xl bg-[#f8fbf9] p-3"><span className="flex items-center gap-2"><CloudRain className="h-4 w-4 text-[#146c43]" /> வானிலை</span><b>{decision?.risk?.signals_used?.includes("weather") ? "உள்ளது" : "இல்லை"}</b></div>
-                <div className="flex items-center justify-between rounded-xl bg-[#f8fbf9] p-3"><span className="flex items-center gap-2"><Satellite className="h-4 w-4 text-violet-600" /> செயற்கைக்கோள்</span><b>{satellite?.available && satelliteUsed ? "பயன்படுத்தப்பட்டது" : satellite?.available ? "கிடைத்தது" : "இல்லை"}</b></div>
+            <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
+              <div className="flex items-center justify-between"><h3 className="font-bold text-[#13271d]">Evidence status</h3><CheckCircle2 className="h-5 w-5 text-[#146c43]" /></div>
+              <div className="mt-4 space-y-3 text-sm">
+                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Satellite className="h-4 w-4" /> Satellite</span><span className="font-semibold">{satelliteUsed ? "Used" : "Available"}</span></div>
+                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><CloudRain className="h-4 w-4" /> Weather</span><span className="font-semibold">{decision?.risk?.signals_used?.includes("weather") ? "Used" : "Not available"}</span></div>
+                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Camera className="h-4 w-4" /> Farmer photo</span><span className="font-semibold">{decision?.vision?.observation ? "Used" : "Not available"}</span></div>
+                <div className="flex items-center justify-between"><span className="flex items-center gap-2 text-[#596a60]"><Clock3 className="h-4 w-4" /> Observation</span><span className="font-semibold">{formatAge(satellite?.observation_age_hours)}</span></div>
               </div>
-              <div className="mt-3 rounded-xl border border-[#dfe9e2] p-3 text-xs leading-5 text-[#596a60]">
-                {hasSatelliteConflict ? "பழைய satellite தகவல் தற்போதைய பயிருடன் முரண்பட்டதால், அதை risk கணக்கில் நம்பகமான ஆதாரமாக பயன்படுத்தவில்லை." : satellite?.available ? `சமீபத்திய satellite observation: ${formatAge(satellite.observation_age_hours)}. Cloud quality: ${satellite.cloud_percent_mean != null ? `${satellite.cloud_percent_mean.toFixed(0)}%` : "தகவல் இல்லை"}.` : "Satellite தகவல் இல்லை. Photo / weather evidence மட்டும் பயன்படுத்தப்பட்டிருக்கலாம்."}
-              </div>
-            </section>
+              {hasSatelliteConflict && <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-900"><AlertTriangle className="mr-1 inline h-4 w-4" /> Satellite and recent crop evidence disagree. Field verification is recommended.</div>}
+            </div>
 
-            <section className="rounded-2xl border border-[#dfe9e2] bg-white p-4 text-xs leading-5 text-[#718078]">
-              <div className="flex items-center gap-2 font-bold text-[#596a60]"><Clock3 className="h-4 w-4" /> Satellite freshness</div>
-              <p className="mt-1">Sentinel-2 என்பது periodic observation. இது live camera அல்ல. ஒவ்வொரு மரத்திற்கும் தனித்தனி risk என்று இந்த map காட்டாது.</p>
-              {satellite?.resolution_m && <p className="mt-1">Analysis resolution: approximately {satellite.resolution_m} m.</p>}
-              {satellite?.warnings?.[0] && <p className="mt-2 rounded-lg bg-amber-50 p-2 text-amber-800">{satellite.warnings[0]}</p>}
-            </section>
+            <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
+              <h3 className="font-bold text-[#13271d]">அடுத்து என்ன செய்ய வேண்டும்?</h3>
+              <p className="mt-2 text-sm leading-6 text-[#596a60]">{decision?.action || "தோட்டத்தில் பாதிக்கப்பட்ட பகுதியின் புதிய புகைப்படத்தை எடுக்கவும்."}</p>
+              <div className="mt-4 grid gap-2">
+                <Button onClick={() => navigate("/inspect")} className="rounded-xl bg-[#146c43] hover:bg-[#0f5836]"><Camera className="mr-2 h-4 w-4" /> மீண்டும் படம் எடுக்கவும்</Button>
+                <Button onClick={() => navigate(-1)} variant="outline" className="rounded-xl"><ArrowLeft className="mr-2 h-4 w-4" /> பின்செல்லவும்</Button>
+              </div>
+            </div>
+
+            <div className="rounded-[24px] border border-sky-100 bg-sky-50 p-5 text-sm text-sky-900"><div className="flex items-center gap-2 font-bold"><Wind className="h-4 w-4" /> Satellite ≠ live camera</div><p className="mt-2 leading-6">Satellite observation கால இடைவெளியுடன் கிடைக்கும். இது தோட்டத்தின் vegetation pattern-ஐ காட்டுகிறது; ஒரு தனி வாழை மரத்தின் நோயை உறுதி செய்யாது.</p></div>
+            <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 text-xs leading-5 text-[#718078]">{farmerConfirmedBoundary ? "இந்த வரைபடத்தின் எல்லை நீங்கள் உறுதிப்படுத்திய farm boundary-ஐ அடிப்படையாகக் கொண்டது." : "Farm boundary உறுதி செய்யப்படவில்லை; வரைபடம் location buffer-ஐ மட்டும் காட்டுகிறது."} {satellite?.farm_geometry?.area_m2 != null ? `பரப்பு: ${satellite.farm_geometry.area_m2.toFixed(0)} m².` : ""}</div>
           </aside>
         </div>
-
-        {!decision && <div className="mt-5 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">முதலில் ஒரு புகைப்படத்தை AI மூலம் சரிபார்க்கவும். அதன் பிறகு இந்த map உங்கள் சமீபத்திய evidence முடிவை காட்டும்.</div>}
-
-        <div className="mt-5 flex flex-wrap gap-2"><Button variant="outline" onClick={() => navigate("/dashboard")} className="rounded-xl bg-white"><ArrowLeft className="mr-2 h-4 w-4" /> Dashboard</Button><Button variant="outline" onClick={() => navigate("/risk")} className="rounded-xl bg-white">வானிலை ஆபத்து</Button></div>
       </div>
     </div>
   );
