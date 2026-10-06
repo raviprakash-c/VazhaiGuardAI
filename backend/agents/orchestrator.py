@@ -12,6 +12,7 @@ from services.bedrock_service import generate_text
 from services.model_router import route_request
 from services.multimodal_service import analyze_crop_image, decode_data_url
 from services.decision_evaluator import evaluate_multimodal_decision
+from services.unified_risk_engine import calculate_unified_risk
 from routes.multimodal import _fuse_signals, _generate_farmer_decision
 
 
@@ -161,12 +162,12 @@ def _run_multimodal_evidence_loop(request: AgentRequest, trace: list[dict[str, A
         "level": label,
         "signals_used": signals_used,
         "weights_used": weights_used,
-        "evidence_state": _fuse_signals(
-            vision,
-            request.weather_context,
-            request.satellite_context,
-            request.farm_context or request.context,
-        )[4],
+        "evidence_state": calculate_unified_risk(
+            vision=vision,
+            weather=request.weather_context,
+            satellite=request.satellite_context,
+            farm_context=request.farm_context or request.context,
+        ).get("evidence_state", {}),
     }
 
     # Evaluate the generated decision deterministically before exposing it
