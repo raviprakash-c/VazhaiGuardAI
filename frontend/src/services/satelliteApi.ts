@@ -25,6 +25,19 @@ export interface SatelliteEvidence {
   scene_id?: string;
   warnings?: string[];
   reason?: string;
+  statistics_quality?: {
+    interval_count?: number;
+    quality?: string;
+    indices?: Record<string, {
+      mean?: number | null;
+      min?: number | null;
+      max?: number | null;
+      stDev?: number | null;
+      sampleCount?: number | null;
+      noDataCount?: number | null;
+    }>;
+  };
+  baseline_statistics_quality?: SatelliteEvidence["statistics_quality"];
 }
 
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000").replace(/\/$/, "");
