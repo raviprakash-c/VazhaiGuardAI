@@ -210,7 +210,7 @@ function setup() {
       },
       {
         id: "dataMask",
-        bands: ["ndvi", "ndre", "ndwi"]
+        bands: 1
       }
     ]
   };
@@ -232,7 +232,7 @@ function evaluatePixel(s) {
     ndvi: [ndvi],
     ndre: [ndre],
     ndwi: [ndwi],
-    dataMask: [mask, mask, mask]
+    dataMask: [mask]
   };
 }
 """
