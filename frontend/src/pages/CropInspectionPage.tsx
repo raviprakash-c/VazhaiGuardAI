@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
 import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
-import { inspectAndDecide, reinspectCrop, type InspectAndDecideResult } from "../services/multimodalApi";
+import { getInspectionTimeline, inspectAndDecide, reinspectCrop, type FarmTimeline, type InspectAndDecideResult } from "../services/multimodalApi";
 import { getSatelliteEvidence, type SatelliteEvidence } from "../services/satelliteApi";
 import { getWeather } from "../services/weatherApi";
 
@@ -70,6 +70,7 @@ export default function CropInspectionPage() {
   const [preview, setPreview] = useState("");
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [result, setResult] = useState<InspectAndDecideResult | null>(null);
+  const [farmTimeline, setFarmTimeline] = useState<FarmTimeline | null>(null);
   const [busy, setBusy] = useState(false);
   const [reinspectMode, setReinspectMode] = useState(false);
   const [error, setError] = useState("");
@@ -182,6 +183,16 @@ export default function CropInspectionPage() {
 
       setResult(decision);
       setReinspectMode(false);
+
+      if (farmId) {
+        try {
+          const timeline = await getInspectionTimeline(farmId);
+          setFarmTimeline(timeline);
+        } catch (timelineError) {
+          console.warn("Could not load farm evidence timeline.", timelineError);
+          setFarmTimeline(null);
+        }
+      }
       try {
         localStorage.setItem("vazhaiguard_last_decision", JSON.stringify(decision));
         localStorage.setItem("vazhaiguard_last_decision_at", new Date().toISOString());
@@ -372,6 +383,46 @@ export default function CropInspectionPage() {
                       <div className="rounded-2xl bg-white/80 p-3"><p className="text-[9px] font-bold uppercase text-[#718078]">Cleared</p><p className="mt-1 text-sm font-bold text-[#13271d]">{result.comparison.signals.cleared.length ? result.comparison.signals.cleared.slice(0, 2).join(", ") : "None yet"}</p></div>
                     </div>
                     <div className="mt-3 rounded-2xl bg-[#073b2a] p-3.5 text-sm leading-6 text-white"><span className="font-bold text-[#b8df4b]">NEXT:</span> {result.comparison.next_step}</div>
+                  </div>
+                )}
+
+
+                {farmTimeline && (
+                  <div className="rounded-[30px] border border-[#dce8df] bg-white p-5 shadow-sm sm:p-6">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#146c43]">FARM MEMORY</p>
+                        <h2 className="mt-1 text-xl font-bold text-[#13271d]">பண்ணை வரலாறு</h2>
+                        <p className="mt-1 text-sm leading-6 text-[#66766d]">${farmTimeline.summary.latest_status_message${</p>
+                      </div>
+                      <span className="rounded-full bg-[#eef7f0] px-3 py-1 text-[10px] font-bold text-[#146c43]">${farmTimeline.summary.inspection_count${ சரிபார்ப்புகள்</span>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-2xl bg-[#f7faf8] p-3"><p className="text-[9px] font-bold uppercase text-[#718078]">நிலை</p><p className="mt-1 text-sm font-black text-[#13271d]">${farmTimeline.summary.latest_status === "improving" ? "மேம்படுகிறது" : farmTimeline.summary.latest_status === "attention" ? "கவனம் தேவை" : farmTimeline.summary.latest_status === "stable" ? "நிலையாக உள்ளது" : "தகவல் தேவை"${</p></div>
+                      <div className="rounded-2xl bg-[#f7faf8] p-3"><p className="text-[9px] font-bold uppercase text-[#718078]">சமீபத்திய ஆய்வு</p><p className="mt-1 text-sm font-black text-[#13271d]">${farmTimeline.summary.latest_date || "—"${</p></div>
+                      <div className="rounded-2xl bg-[#f7faf8] p-3"><p className="text-[9px] font-bold uppercase text-[#718078]">அடுத்த செயல்</p><p className="mt-1 text-sm font-black text-[#13271d]">${farmTimeline.next_plan.reinspect ? "மீண்டும் சரிபார்க்கவும்" : "கண்காணிக்கவும்"${</p></div>
+                    </div>
+                    {farmTimeline.summary.active_issues.length > 0 && (
+                      <div className="mt-4 rounded-2xl border border-amber-100 bg-amber-50 p-3.5"><p className="text-[9px] font-bold uppercase tracking-[0.12em] text-amber-800">தற்போதைய கவனிப்புகள்</p><p className="mt-1 text-sm leading-6 text-amber-900">${farmTimeline.summary.active_issues.slice(0, 4).join(" • ")${</p></div>
+                    )}
+                    <div className="mt-5">
+                      {farmTimeline.timeline.slice(0, 5).map((entry, index) => (
+                        <div key={entry.inspection_id || ${`${entry.sequence}-${entry.date}`${} className="relative flex gap-3 pb-5">
+                          {index < Math.min(farmTimeline.timeline.length, 5) - 1 && <div className="absolute left-[11px] top-6 h-full w-px bg-[#dce8df]" />}
+                          <div className="relative z-10 mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#073b2a] text-[9px] font-black text-white">${entry.sequence${</div>
+                          <div className="min-w-0 flex-1 rounded-2xl border border-[#e5ece7] bg-[#f8fbf8] p-3.5">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                              <div><p className="text-xs font-bold text-[#13271d]">${entry.incident${</p><p className="mt-1 text-[10px] text-[#718078]">${entry.date${</p></div>
+                              <div className="flex flex-wrap gap-1.5"><span className="rounded-full bg-white px-2 py-1 text-[9px] font-bold uppercase text-[#146c43]">${entry.status${</span>{entry.risk_score != null && <span className="rounded-full bg-white px-2 py-1 text-[9px] font-bold text-[#596a60]">signal ${entry.risk_score${</span>}</div>
+                            </div>
+                            <p className="mt-2 text-xs leading-5 text-[#596a60]">${entry.action${</p>
+                            {entry.signals.length > 0 && <p className="mt-2 text-[10px] leading-5 text-[#718078]">கவனிப்பு: ${entry.signals.slice(0, 3).join(" • ")${</p>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                    <div className="mt-1 rounded-2xl bg-[#073b2a] p-3.5 text-sm leading-6 text-white"><span className="font-bold text-[#b8df4b]">அடுத்த சரிபார்ப்பு:</span> ${farmTimeline.next_plan.when${ — ${farmTimeline.next_plan.where${</div>
+                    <details className="mt-4"><summary className="cursor-pointer text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Technical timeline details</summary><div className="mt-2 rounded-2xl bg-[#f7faf8] p-3 text-[10px] leading-5 text-[#718078]">Engine: ${farmTimeline.engine${ • Trigger: ${farmTimeline.next_plan.trigger${ • Decision: ${farmTimeline.next_plan.decision${</div></details>
                   </div>
                 )}
 
