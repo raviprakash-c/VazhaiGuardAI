@@ -153,7 +153,8 @@ async def get_weather(
             "precipitation_probability,"
             "precipitation,"
             "wind_speed_10m,"
-            "wind_gusts_10m"
+            "wind_gusts_10m,"
+            "weather_code"
         ),
 
         "forecast_days": 2,
@@ -209,6 +210,11 @@ async def get_weather(
         [],
     )
 
+    weather_codes = hourly.get(
+        "weather_code",
+        [],
+    )
+
     # --------------------------------------------------------
     # Only consider the next 24 forecast hours
     # --------------------------------------------------------
@@ -227,6 +233,10 @@ async def get_weather(
 
     wind_gust_values_24 = (
         wind_gust_values[:24]
+    )
+
+    weather_codes_24 = (
+        weather_codes[:24]
     )
 
     max_rain_probability = (
@@ -277,6 +287,17 @@ async def get_weather(
             peak_gust_time = (
                 times[peak_index]
             )
+
+    hourly_forecast = []
+    for index, time_value in enumerate(times[:24]):
+        hourly_forecast.append({
+            "time": time_value,
+            "rain_probability": float(rain_probabilities_24[index]) if index < len(rain_probabilities_24) else 0.0,
+            "precipitation": float(precipitation_values_24[index]) if index < len(precipitation_values_24) else 0.0,
+            "wind_speed": float(wind_speed_values_24[index]) if index < len(wind_speed_values_24) else 0.0,
+            "wind_gust": float(wind_gust_values_24[index]) if index < len(wind_gust_values_24) else 0.0,
+            "weather_code": int(weather_codes_24[index]) if index < len(weather_codes_24) and weather_codes_24[index] is not None else None,
+        })
 
     return {
         "location": {
@@ -358,6 +379,9 @@ async def get_weather(
 
             "peak_rain_probability":
                 peak_rain_probability,
+
+            "hourly_forecast":
+                hourly_forecast,
         },
     }
 
