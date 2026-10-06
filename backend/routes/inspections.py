@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import uuid
 from typing import Any
 
@@ -142,12 +143,12 @@ def inspection_next_action(farm_id: str) -> dict[str, Any]:
     history = list(farm.get("inspection_history") or [])
     weather = None
     try:
-        from weather import get_weather_for_location
+        from weather import get_weather
         location = farm.get("location") or {}
         latitude = location.get("latitude")
         longitude = location.get("longitude")
         if latitude is not None and longitude is not None:
-            weather = get_weather_for_location(float(latitude), float(longitude))
+            weather = asyncio.run(get_weather(float(latitude), float(longitude)))
     except Exception:
         weather = None
     return {
