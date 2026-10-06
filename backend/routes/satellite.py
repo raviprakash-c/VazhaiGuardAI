@@ -63,7 +63,7 @@ def satellite_evidence(request: SatelliteEvidenceRequest) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail="Satellite evidence is temporarily unavailable.",
+            detail=f"Satellite evidence error: {type(exc).__name__}: {str(exc)[:1000]}",
         ) from exc
 
 
