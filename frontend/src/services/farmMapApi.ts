@@ -388,6 +388,52 @@ export async function saveFarmLocation(
   return data;
 }
 
+
+/* =========================================================
+   GET SAVED FARM
+   ========================================================= */
+
+export async function getSavedFarm(
+  farmId: string
+): Promise<Record<string, unknown>> {
+  if (!farmId) {
+    throw new Error("Farm ID is required.");
+  }
+
+  let response: Response;
+
+  try {
+    response = await fetch(
+      API_BASE_URL + "/farm/" + encodeURIComponent(farmId),
+      {
+        method: "GET",
+        headers: { Accept: "application/json" },
+      }
+    );
+  } catch {
+    throw new Error(
+      "Unable to connect to VazhaiGuardAI backend while loading the saved farm."
+    );
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        "Unable to load the saved farm."
+      )
+    );
+  }
+
+  const data = (await response.json()) as Record<string, unknown>;
+
+  if (!data || typeof data !== "object") {
+    throw new Error("Invalid saved farm response from backend.");
+  }
+
+  return data;
+}
+
 /* =========================================================
    CREATE AI FARM PROFILE
    ========================================================= */
