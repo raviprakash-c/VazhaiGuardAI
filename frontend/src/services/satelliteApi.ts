@@ -42,3 +42,27 @@ export async function getSatellitePreview(input: SatelliteInput): Promise<string
   if (!response.ok) { const body = await response.json().catch(() => null); throw new Error(body?.detail || `Satellite preview failed (${response.status}).`); }
   return URL.createObjectURL(await response.blob());
 }
+
+
+export type SatelliteLayer = "ndvi" | "ndre" | "ndwi" | "stress";
+
+export async function getSatelliteLayer(
+  input: SatelliteInput,
+  layer: SatelliteLayer,
+): Promise<string> {
+  const response = await fetch(`${API_BASE}/ai/satellite/layer`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      ...toPayload(input),
+      layer,
+    }),
+  });
+
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    throw new Error(body?.detail || `Satellite ${layer} layer failed (${response.status}).`);
+  }
+
+  return URL.createObjectURL(await response.blob());
+}
