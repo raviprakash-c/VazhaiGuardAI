@@ -15,7 +15,7 @@ import {
   Volume2,
   Wind,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   CircleMarker,
   ImageOverlay,
@@ -1116,7 +1116,7 @@ function EvidenceRow({
   label,
   enabled,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   enabled: boolean;
 }) {
