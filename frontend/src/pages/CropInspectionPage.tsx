@@ -5,7 +5,7 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
 import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
-import { inspectAndDecide, type InspectAndDecideResult } from "../services/multimodalApi";
+import { inspectAndDecide, reinspectCrop, type InspectAndDecideResult } from "../services/multimodalApi";
 import { getSatelliteEvidence, type SatelliteEvidence } from "../services/satelliteApi";
 import { getWeather } from "../services/weatherApi";
 
@@ -71,6 +71,7 @@ export default function CropInspectionPage() {
   const [imageDataUrl, setImageDataUrl] = useState("");
   const [result, setResult] = useState<InspectAndDecideResult | null>(null);
   const [busy, setBusy] = useState(false);
+  const [reinspectMode, setReinspectMode] = useState(false);
   const [error, setError] = useState("");
   const [weatherLoaded, setWeatherLoaded] = useState(false);
   const [weatherData, setWeatherData] = useState<WeatherContext | null>(null);
@@ -86,7 +87,7 @@ export default function CropInspectionPage() {
     }
     try {
       setError("");
-      setResult(null);
+      if (!reinspectMode) setResult(null);
       setWeatherLoaded(false);
       setWeatherData(null);
       setSatelliteEvidence(null);
@@ -137,8 +138,29 @@ export default function CropInspectionPage() {
         console.warn("Could not persist the latest satellite evidence.", storageError);
       }
 
-      const decision = await inspectAndDecide({
+      const savedRaw = localStorage.getItem("vazhaiguard_farm_complete");
+      let farmId = "";
+      if (savedRaw) {
+        try {
+          const saved = JSON.parse(savedRaw) as Record<string, unknown>;
+          farmId = String(saved.farm_id || saved.farmId || "");
+        } catch {
+          farmId = "";
+        }
+      }
+
+      const decision = reinspectMode
+        ? await reinspectCrop({
+            farmId,
+            imageDataUrl,
+            language: "ta-IN",
+            zoneId: "field-photo",
+            weatherContext: weather || undefined,
+            satelliteContext: satellite?.available ? satellite as unknown as Record<string, unknown> : undefined,
+          })
+        : await inspectAndDecide({
         imageDataUrl,
+        farmId: farmId || undefined,
         language: "ta-IN",
         zoneId: "field-photo",
         farmContext: {
@@ -151,6 +173,7 @@ export default function CropInspectionPage() {
       });
 
       setResult(decision);
+      setReinspectMode(false);
       try {
         localStorage.setItem("vazhaiguard_last_decision", JSON.stringify(decision));
         localStorage.setItem("vazhaiguard_last_decision_at", new Date().toISOString());
@@ -162,6 +185,12 @@ export default function CropInspectionPage() {
     } finally {
       setBusy(false);
     }
+  };
+
+  const startReinspection = () => {
+    setReinspectMode(true);
+    setError("");
+    inputRef.current?.click();
   };
 
   const speakAdvice = () => {
@@ -305,6 +334,27 @@ export default function CropInspectionPage() {
                   <div className="grid gap-4 md:grid-cols-2"><div className="rounded-[24px] border border-[#e0e9e2] bg-[#fbfdfb] p-5"><div className="flex items-center justify-between"><div><p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#718078]">Output evaluation</p><h2 className="mt-1 text-lg font-bold text-[#13271d]">Decision quality</h2></div><span className={result.evaluation.grade === "pass" ? "rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700" : result.evaluation.grade === "review" ? "rounded-full bg-amber-50 px-3 py-1 text-xs font-bold text-amber-800" : "rounded-full bg-red-50 px-3 py-1 text-xs font-bold text-red-700"}>{result.evaluation.grade.toUpperCase()}</span></div><div className="mt-4 grid grid-cols-2 gap-2"><div className="rounded-xl bg-white p-3"><p className="text-[9px] uppercase text-[#718078]">Quality</p><p className="mt-1 text-xl font-bold text-[#13271d]">{Math.round(result.evaluation.quality_score * 100)}%</p></div><div className="rounded-xl bg-white p-3"><p className="text-[9px] uppercase text-[#718078]">Verification</p><p className="mt-1 text-sm font-bold text-[#13271d]">{result.evaluation.requires_field_verification ? "Required" : "Not required"}</p></div></div>{result.evaluation.issues.length > 0 && <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-[11px] leading-5 text-amber-900">{result.evaluation.issues.slice(0, 3).map((issue) => <div key={issue.code}>• {issue.message}</div>)}</div>}</div><div className="rounded-[24px] border border-[#e0e9e2] bg-[#fbfdfb] p-5"><div className="flex items-center justify-between"><div><p className="text-[9px] font-bold uppercase tracking-[0.15em] text-[#718078]">Unified risk</p><h2 className="mt-1 text-lg font-bold text-[#13271d]">Evidence mix</h2></div><span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase ${riskStyle[result.risk.level]}`}>{result.risk.level} • {result.risk.score}/100</span></div><div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-white p-3 text-center"><p className="text-[9px] text-[#718078]">Photo</p><p className="mt-1 font-bold text-[#13271d]">{Math.round(result.signal_scores.vision)}</p></div><div className="rounded-xl bg-white p-3 text-center"><p className="text-[9px] text-[#718078]">Weather</p><p className="mt-1 font-bold text-[#13271d]">{weatherLoaded ? Math.round(result.signal_scores.weather) : "—"}</p></div><div className="rounded-xl bg-white p-3 text-center"><p className="text-[9px] text-[#718078]">Satellite</p><p className="mt-1 font-bold text-[#13271d]">{satelliteIncluded ? Math.round(result.signal_scores.satellite) : "—"}</p></div></div></div></div>
                   </div>
                 </details>
+
+                <div className="rounded-[30px] border border-[#dce8df] bg-white p-5 shadow-sm sm:p-6">
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#146c43]">FIELD INCIDENT</p>
+                      <h2 className="mt-1 text-xl font-bold text-[#13271d]">{result.incident.incident.replaceAll("_", " ")}</h2>
+                      <p className="mt-1 text-sm text-[#66766d]">{result.incident.where} • {result.incident.severity.toUpperCase()}</p>
+                    </div>
+                    <span className="rounded-full bg-[#eef7f0] px-3 py-1 text-[10px] font-bold text-[#146c43]">ACTION PLAN</span>
+                  </div>
+                  <div className="mt-4 space-y-2">
+                    {result.incident.actions.map((item) => <div key={`${item.priority}-${item.action}`} className="rounded-2xl border border-[#e5ece7] bg-[#f8fbf8] p-3.5">
+                      <div className="flex gap-3"><span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#073b2a] text-xs font-black text-white">{item.priority}</span><div><p className="text-sm font-bold text-[#13271d]">{item.action}</p><p className="mt-1 text-xs text-[#66766d]">WHEN: {item.when}</p><p className="mt-1 text-xs text-[#66766d]">WHERE: {item.where}</p></div></div>
+                    </div>)}
+                  </div>
+                  {result.incident.field_verification_required && <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div><p className="text-sm font-bold text-amber-900">ஒரு முறை கூடுதல் களச் சரிபார்ப்பு தேவை</p><p className="mt-1 text-xs leading-5 text-amber-800">புதிய புகைப்படம் மூலம் முடிவை மீண்டும் சரிபார்க்கலாம்.</p></div>
+                    <Button onClick={startReinspection} className="rounded-xl bg-amber-700 text-white hover:bg-amber-800">மீண்டும் சரிபார்க்கவும்</Button>
+                  </div>}
+                  {result.inspection_storage?.stored && <p className="mt-3 text-[10px] font-semibold text-[#718078]">✓ Inspection evidence securely stored in S3 and linked to farm history.</p>}
+                </div>
 
                 <div className="rounded-[30px] bg-[#073b2a] p-5 text-white shadow-[0_18px_45px_rgba(7,59,42,.16)] sm:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-[9px] font-bold uppercase tracking-[0.16em] text-[#b8df4b]">AI FIELD DECISION</p><h2 className="mt-1 text-xl font-bold">பண்ணைக்கு அடுத்த செயல்</h2></div><div className="rounded-xl bg-white/10 p-2"><ShieldAlert className="h-5 w-5 text-[#b8df4b]" /></div></div><p className="mt-4 text-sm leading-6 text-white/85">{result.decision.summary}</p><div className="mt-4 space-y-2">{result.decision.priority_actions.map((item) => <div key={`${item.priority}-${item.action}`} className="rounded-2xl border border-white/10 bg-white/10 p-3.5"><p className="text-xs font-bold">{item.priority}. {item.action}</p><p className="mt-1 text-[11px] leading-5 text-white/65">{item.reason}</p></div>)}</div>{result.decision.follow_up_check && <p className="mt-3 rounded-xl bg-white/10 p-3 text-xs leading-5 text-white/80">களச் சரிபார்ப்பு: {result.decision.follow_up_check}</p>}<div className="mt-4 flex flex-col gap-2 sm:flex-row"><Button onClick={speakAdvice} variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/20"><Volume2 className="mr-2 h-4 w-4" />{isSpeaking ? "Speaking..." : "தமிழில் கேளுங்கள்"}</Button><Button onClick={() => navigate("/risk-map")} variant="outline" className="rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/20">Farm risk map <ArrowUpRight className="ml-2 h-4 w-4" /></Button></div></div>
               </>
