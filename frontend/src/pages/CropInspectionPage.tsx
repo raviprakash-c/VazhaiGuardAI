@@ -140,10 +140,16 @@ export default function CropInspectionPage() {
 
       const savedRaw = localStorage.getItem("vazhaiguard_farm_complete");
       let farmId = "";
+      let savedFarmProfile: Record<string, unknown> = {};
       if (savedRaw) {
         try {
           const saved = JSON.parse(savedRaw) as Record<string, unknown>;
           farmId = String(saved.farm_id || saved.farmId || "");
+          if (saved.farm_profile && typeof saved.farm_profile === "object") {
+            savedFarmProfile = saved.farm_profile as Record<string, unknown>;
+          } else if (saved.profile && typeof saved.profile === "object") {
+            savedFarmProfile = saved.profile as Record<string, unknown>;
+          }
         } catch {
           farmId = "";
         }
@@ -164,7 +170,9 @@ export default function CropInspectionPage() {
         language: "ta-IN",
         zoneId: "field-photo",
         farmContext: {
-          crop: "banana",
+          ...savedFarmProfile,
+          farm_name: savedFarmProfile.farm_name || savedFarmProfile.name || "your farm",
+          crop: savedFarmProfile.crop || "banana",
           inspection_source: "farmer_photo",
           location_source: locationSource === "saved-farm" ? "farmer_confirmed_farm" : locationSource === "device" ? "device_gps_fallback" : "unavailable",
         },
