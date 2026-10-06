@@ -73,6 +73,51 @@ export interface InspectionComparison {
   engine: string;
 }
 
+
+export interface FarmTimelineEntry {
+  inspection_id: string | null;
+  parent_inspection_id: string | null;
+  sequence: number;
+  date: string;
+  created_at?: string | null;
+  status: "baseline" | "improved" | "stable" | "worsened";
+  incident: string;
+  severity: "low" | "moderate" | "high";
+  risk_score: number | null;
+  signals: string[];
+  photo_stored: boolean;
+  action: string;
+  next_step: string;
+  field_verification_required: boolean;
+}
+
+export interface FarmTimeline {
+  farm_id: string;
+  summary: {
+    inspection_count: number;
+    latest_inspection_id: string | null;
+    latest_date: string | null;
+    latest_status: "improving" | "stable" | "attention" | "unknown";
+    latest_status_message: string;
+    trend: "improving" | "stable" | "worsening" | "unknown";
+    active_issues: string[];
+    latest_risk_score: number | null;
+  };
+  timeline: FarmTimelineEntry[];
+  next_plan: {
+    decision: string;
+    priority: "low" | "normal" | "moderate" | "high";
+    reinspect: boolean;
+    reason: string;
+    when: string;
+    where: string;
+    checks: string[];
+    trigger: string;
+    engine: string;
+  };
+  engine: string;
+}
+
 export interface InspectionStorage {
   stored: boolean;
   status: string;
@@ -152,5 +197,11 @@ export async function reinspectCrop(input: {
 export async function getInspectionHistory(farmId: string): Promise<{ farm_id: string; inspections: Array<Record<string, unknown>> }> {
   const response = await fetch(`${API_BASE}/ai/inspections/${encodeURIComponent(farmId)}/history`);
   if (!response.ok) throw new Error((await response.text()) || `Inspection history failed (${response.status})`);
+  return response.json();
+}
+
+export async function getInspectionTimeline(farmId: string): Promise<FarmTimeline> {
+  const response = await fetch(`${API_BASE}/ai/inspections/${encodeURIComponent(farmId)}/timeline`);
+  if (!response.ok) throw new Error((await response.text()) || `Inspection timeline failed (${response.status})`);
   return response.json();
 }
