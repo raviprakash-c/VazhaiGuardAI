@@ -6,6 +6,7 @@ import os
 from typing import Any
 
 from .bedrock_service import get_bedrock_client, extract_json
+from .image_quality import validate_image_quality
 
 
 PRIMARY_VISION_MODEL = os.getenv(
@@ -90,6 +91,12 @@ def analyze_crop_image(
         raise ValueError("Image is too large. Maximum supported size is 8 MB.")
 
     image_format = _image_format(content_type)
+    quality = validate_image_quality(image_bytes, (content_type or "image/jpeg").split(";", 1)[0].lower())
+    if not quality["accepted"]:
+        raise ValueError(
+            "Photo quality check failed: " + " ".join(quality["issues"])
+        )
+
     prompt = _inspection_prompt(language, farm_context, weather_context)
     client = get_bedrock_client()
 
