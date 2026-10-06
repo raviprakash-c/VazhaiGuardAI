@@ -246,12 +246,6 @@ function boundsFromPaths(
   ];
 }
 
-function levelFromScore(score: number): RiskLevel {
-  if (score >= 70) return "high";
-  if (score >= 40) return "moderate";
-  return "low";
-}
-
 function formatAge(hours?: number | null): string {
   if (hours == null || !Number.isFinite(hours)) return "—";
   if (hours < 24) return Math.max(1, Math.round(hours)) + "h ago";
@@ -390,7 +384,6 @@ export default function FarmRiskMapPage() {
     activeLayer === "sentinel" ? sentinelPreviewUrl : null;
 
   const stats = satellite?.statistics_quality;
-  const baselineStats = satellite?.baseline_statistics_quality;
   const validPixels = stats?.indices?.ndvi?.sampleCount ?? null;
   const noDataPixels = stats?.indices?.ndvi?.noDataCount ?? null;
   const statsQuality = stats?.quality === "valid_statistics";
