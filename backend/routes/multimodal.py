@@ -218,11 +218,34 @@ def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
         )
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
+
+    risk_result = calculate_unified_risk(
+        vision=request.vision,
+        weather=request.weather,
+        satellite=request.satellite,
+        farm_context=request.farm_context,
+    )
+    risk = {
+        "score": score,
+        "level": label,
+        "signals_used": signals_used,
+        "weights_used": weights_used,
+        "evidence_state": risk_result.get("evidence_state", {}),
+    }
+    evaluation = evaluate_multimodal_decision(
+        vision=request.vision,
+        weather=request.weather,
+        satellite=request.satellite,
+        risk=risk,
+        decision=decision,
+    )
+
     return {
         "zone_id": request.zone_id,
-        "risk": {"score": score, "level": label, "signals_used": signals_used, "weights_used": weights_used},
+        "risk": risk,
         "signal_scores": signal_scores,
         "decision": decision,
+        "evaluation": evaluation,
         "action": decision.get("farmer_message", ""),
         "decision_model": TEXT_MODEL_ID,
     }
