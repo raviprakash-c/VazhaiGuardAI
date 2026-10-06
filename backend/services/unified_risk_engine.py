@@ -111,8 +111,15 @@ def calculate_unified_risk(
         "satellite": bool(satellite),
     }
 
-    # A known temporal crop conflict makes the satellite observation historical,
-    # so it contributes no decision weight until the farmer confirms the field.
+    # Stale satellite imagery is retained for transparency/context, but it must
+    # not contribute to a current plant-level decision. Sentinel-2 is periodic,
+    # not a live field sensor.
+    satellite_status = evidence_state["freshness"].get("satellite", {}).get("status")
+    if satellite_status == "stale":
+        adjusted["satellite"] = 0.0
+
+    # A known temporal crop conflict also makes the satellite observation
+    # historical until the farmer confirms the field.
     if any(c.get("type") == "temporal_crop_conflict" for c in evidence_state["conflicts"]):
         adjusted["satellite"] = 0.0
 
