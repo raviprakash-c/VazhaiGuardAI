@@ -8,13 +8,13 @@ from fastapi.responses import FileResponse
 # ROUTERS
 # ------------------------------------------------------------
 # farm_map.py, parcel.py and voice_registration.py are in the
-# backend project root. agents/orchestrator.py is under agents/.
+# backend project root. agents/orchestrator.py is under agents.
 from farm_map import router as farm_map_router
 from parcel import router as parcel_router
 from voice_registration import router as voice_registration_router
 from agents.orchestrator import router as orchestrator_router
 from weather import router as weather_router
-
+from routes.satellite import router as satellite_router
 
 
 # ------------------------------------------------------------
@@ -90,20 +90,12 @@ async def get_tamil_audio(field: str):
 # ------------------------------------------------------------
 # ROUTER REGISTRATION
 # ------------------------------------------------------------
-# IMPORTANT:
-# The variable names above match the aliases used here.
-# This fixes the previous:
-# NameError: name 'farm_map_router' is not defined
-# ------------------------------------------------------------
 app.include_router(voice_registration_router)
 app.include_router(farm_map_router)
 app.include_router(parcel_router)
 app.include_router(orchestrator_router)
 app.include_router(weather_router)
-app.include_router(
-    weather_router
-)
-
+app.include_router(satellite_router)
 
 
 # ------------------------------------------------------------
