@@ -1474,6 +1474,24 @@ export default function FarmLocationPage() {
           parcel_id:
             selectedParcel?.parcel_id,
 
+          parcel_metadata:
+            locationResponse.parcel_metadata ||
+            (selectedParcel
+              ? {
+                  district: selectedParcel.district,
+                  taluk: selectedParcel.taluk,
+                  village: selectedParcel.village,
+                  survey_number: selectedParcel.survey_number,
+                  subdivision: selectedParcel.subdivision,
+                  land_id: selectedParcel.land_id,
+                  unit_id: selectedParcel.unit_id,
+                  block_id: selectedParcel.block_id,
+                  kide: selectedParcel.kide,
+                  confidence: selectedParcel.confidence,
+                  source_file: selectedParcel.source_file,
+                }
+              : undefined),
+
           parcel:
             selectedParcel,
 
