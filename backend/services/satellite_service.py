@@ -289,7 +289,7 @@ function setup() {
 
 function evaluatePixel(s) {
   var invalid = [1, 2, 3, 7, 8, 9, 10, 11].includes(s.SCL);
-  var alpha = s.dataMask * (cloudy ? 0 : 1);
+  var alpha = s.dataMask * (invalid ? 0 : 1);
 
   return [
     2.5 * s.B04,
@@ -305,7 +305,7 @@ def _stats(
     token: str,
     geometry: dict[str, Any],
     scene_time: datetime,
-) -> list[float | None]:
+) -> tuple[list[float | None], dict[str, Any]]:
     start, end = _scene_window(scene_time)
     stats_geometry = _canonical_polygon(geometry)
 
@@ -351,7 +351,7 @@ def _stats(
 
     data = response.json().get("data") or []
     if not data:
-        return [None, None, None]
+        return [None, None, None], {"interval_count": 0, "quality": "no_statistics"}
 
     # The Statistics API returns one entry per aggregation interval.
     # Each named output follows: outputs -> <output> -> bands -> B0 -> stats.
@@ -370,12 +370,23 @@ def _stats(
             if current is None or sample_count > (current.get("sampleCount") or 0.0):
                 best[name] = {
                     "mean": _num(stats.get("mean")),
+                    "min": _num(stats.get("min")),
+                    "max": _num(stats.get("max")),
+                    "stDev": _num(stats.get("stDev")),
                     "sampleCount": sample_count,
                     "noDataCount": _num(stats.get("noDataCount")) or 0.0,
                 }
 
     values = [_num(best.get(name, {}).get("mean")) for name in ("ndvi", "ndre", "ndwi")]
-    return values
+    diagnostics = {
+        "interval_count": len(data),
+        "quality": "valid_statistics" if all(v is not None for v in values) else "partial_statistics",
+        "indices": {
+            name: best.get(name, {})
+            for name in ("ndvi", "ndre", "ndwi")
+        },
+    }
+    return values, diagnostics
 
 
 def _satellite_stress(
@@ -589,12 +600,12 @@ def analyze_satellite_evidence(
     token = _token()
     scene = recent[0]
     scene_time = _scene_time(scene)
-    values = _stats(token, geometry, scene_time)
+    values, diagnostics = _stats(token, geometry, scene_time)
 
-    baseline_values = (
+    baseline_values, baseline_diagnostics = (
         _stats(token, geometry, _scene_time(baseline[0]))
         if baseline
-        else [None, None, None]
+        else ([None, None, None], {"interval_count": 0, "quality": "no_baseline"})
     )
 
     ndvi, ndre, ndwi = values
@@ -615,7 +626,7 @@ def analyze_satellite_evidence(
     else:
         trend = "stable"
 
-    risk_score, confidence = _satellite_stress(ndvi, ndre, ndwi)
+    risk_score, confidence = _satellite_stress(ndvi, ndre, ndwi) if diagnostics.get("quality") == "valid_statistics" else (None, None)
     age_hours = round(
         max(0, (now - scene_time).total_seconds() / 3600),
         1,
@@ -638,6 +649,11 @@ def analyze_satellite_evidence(
             "The selected scene has substantial scene cloud cover; interpret results cautiously."
         )
 
+    if diagnostics.get("quality") != "valid_statistics":
+        warnings.append(
+            "Satellite statistics are incomplete; do not use the stress score as a decision signal."
+        )
+
     return {
         "available": True,
         "provider": "Copernicus Data Space Ecosystem",
@@ -655,6 +671,8 @@ def analyze_satellite_evidence(
         "observation_age_hours": age_hours,
         "image_count": len(recent),
         "cloud_percent_mean": cloud,
+        "statistics_quality": diagnostics,
+        "baseline_statistics_quality": baseline_diagnostics,
         "ndvi": ndvi,
         "ndre": ndre,
         "ndwi": ndwi,
