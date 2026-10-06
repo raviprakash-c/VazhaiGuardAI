@@ -179,10 +179,13 @@ def _scene_time(scene: dict[str, Any]) -> datetime:
 
 
 def _scene_window(scene_time: datetime) -> tuple[str, str]:
-    return (
-        _iso(scene_time - timedelta(minutes=3)),
-        _iso(scene_time + timedelta(minutes=3)),
+    # Statistics API works reliably when the aggregation window covers the
+    # complete UTC acquisition day rather than only a few minutes around the
+    # STAC timestamp.
+    day_start = scene_time.astimezone(timezone.utc).replace(
+        hour=0, minute=0, second=0, microsecond=0
     )
+    return _iso(day_start), _iso(day_start + timedelta(days=1))
 
 
 STATS_EVALSCRIPT = r"""
@@ -309,16 +312,25 @@ def _stats(
     if not data:
         return [None, None, None]
 
-    outputs = data[0].get("outputs", {})
+    # The Statistics API returns one entry per aggregation interval. Find the
+    # interval containing valid pixels instead of assuming data[0] has them.
+    values: list[float | None] = []
+    for name in ("ndvi", "ndre", "ndwi"):
+        value = None
+        for interval in data:
+            outputs = interval.get("outputs") or {}
+            stats = (
+                ((outputs.get(name) or {}).get("bands", {}).get("B0") or {})
+                .get("stats")
+                or {}
+            )
+            candidate = _num(stats.get("mean"))
+            if candidate is not None:
+                value = candidate
+                break
+        values.append(value)
 
-    return [
-        _num(
-            (((outputs.get(name) or {}).get("bands", {}).get("B0") or {})
-             .get("stats", {})
-             .get("mean"))
-        )
-        for name in ("ndvi", "ndre", "ndwi")
-    ]
+    return values
 
 
 def _satellite_stress(
