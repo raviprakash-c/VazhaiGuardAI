@@ -16,6 +16,7 @@ from agents.orchestrator import router as orchestrator_router
 from weather import router as weather_router
 from routes.satellite import router as satellite_router
 from routes.multimodal import router as multimodal_router
+from routes.inspections import router as inspections_router
 
 
 # ------------------------------------------------------------
@@ -98,6 +99,7 @@ app.include_router(orchestrator_router)
 app.include_router(weather_router)
 app.include_router(satellite_router)
 app.include_router(multimodal_router)
+app.include_router(inspections_router)
 
 
 # ------------------------------------------------------------
