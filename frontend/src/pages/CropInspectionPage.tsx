@@ -1,4 +1,4 @@
-import { Camera, CheckCircle2, ImagePlus, Loader2, MapPinned, ShieldAlert, Volume2, CloudRain, Satellite, Leaf } from "lucide-react";
+import { Camera, CheckCircle2, ImagePlus, Loader2, MapPinned, ShieldAlert, Volume2, CloudRain, Satellite } from "lucide-react";
 import { useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
