@@ -64,6 +64,8 @@ type SavedDecision = {
 
 type SavedFarm = {
   farm_id?: string;
+  mapped_area_acres?: number;
+  perimeter_m?: number;
   farm_profile?: {
     farm_name?: string;
     banana_variety?: string;
