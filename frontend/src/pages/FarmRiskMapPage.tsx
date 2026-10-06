@@ -34,6 +34,8 @@ import {
   getSatelliteEvidence,
   getSatelliteLayer,
   getSatellitePreview,
+} from "../services/satelliteApi";
+import { getSavedFarm } from "../services/farmMapApi";
   type SatelliteEvidence,
   type SatelliteLayer,
 } from "../services/satelliteApi";
@@ -275,19 +277,14 @@ export default function FarmRiskMapPage() {
     ]),
   );
 
-  const [farm] = useState(() =>
+  const [farm, setFarm] = useState<SavedFarm | null>(() =>
     readObject<SavedFarm>([
       "vazhaiguard_farm_complete",
       "vazhaiguard:farm",
     ]),
   );
 
-  const [satellite, setSatellite] = useState<SatelliteEvidence | null>(() =>
-    readObject<SatelliteEvidence>([
-      "vazhaiguard_last_satellite_evidence",
-      "vazhaiguard:lastSatelliteEvidence",
-    ]),
-  );
+  const [satellite, setSatellite] = useState<SatelliteEvidence | null>(null);
 
   const [activeLayer, setActiveLayer] = useState<
     SatelliteLayer | "base" | "sentinel"
@@ -302,6 +299,38 @@ export default function FarmRiskMapPage() {
   );
 
   const { speak, isSpeaking } = useVoiceAssistant();
+
+  useEffect(() => {
+    const farmId =
+      farm?.farm_id ||
+      localStorage.getItem("vazhaiguard_farm_id");
+
+    if (!farmId) return;
+
+    let mounted = true;
+
+    void getSavedFarm(farmId)
+      .then((saved) => {
+        if (!mounted) return;
+
+        const canonicalFarm = saved as SavedFarm;
+        setFarm(canonicalFarm);
+        localStorage.setItem(
+          "vazhaiguard_farm_complete",
+          JSON.stringify(canonicalFarm),
+        );
+      })
+      .catch((error) => {
+        console.warn(
+          "[FarmRiskMap] Could not refresh canonical farm data:",
+          error,
+        );
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   const center: LatLngExpression = useMemo(() => {
     const latitude = farm?.location?.latitude;
@@ -472,11 +501,21 @@ export default function FarmRiskMapPage() {
       };
 
       const result = await getSatelliteEvidence(input);
-      setSatellite(result);
+      const cleanedResult: SatelliteEvidence = {
+        ...result,
+        warnings: result.warnings?.filter(
+          (warning) =>
+            !/dynamic world|crop probability|cropland classification/i.test(
+              warning,
+            ),
+        ),
+      };
+
+      setSatellite(cleanedResult);
 
       localStorage.setItem(
         "vazhaiguard_last_satellite_evidence",
-        JSON.stringify(result),
+        JSON.stringify(cleanedResult),
       );
 
       for (const url of Object.values(layerUrls)) {
@@ -1047,6 +1086,30 @@ export default function FarmRiskMapPage() {
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
+              <InfoCard
+                label="Farm name"
+                value={farm?.farm_profile?.farm_name || "—"}
+              />
+              <InfoCard
+                label="Mapped area"
+                value={
+                  typeof farm?.mapped_area_acres === "number"
+                    ? farm.mapped_area_acres.toFixed(2) + " acres"
+                    : "—"
+                }
+              />
+              <InfoCard
+                label="Banana variety"
+                value={farm?.farm_profile?.banana_variety || "—"}
+              />
+              <InfoCard
+                label="Banana area"
+                value={
+                  typeof farm?.farm_profile?.banana_area_acres === "number"
+                    ? farm.farm_profile.banana_area_acres + " acres"
+                    : "—"
+                }
+              />
               <InfoCard
                 label="Village"
                 value={farm?.parcel_metadata?.village || "—"}
