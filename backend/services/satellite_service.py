@@ -328,8 +328,11 @@ def _stats(
             "timeRange": {"from": start, "to": end},
             "aggregationInterval": {"of": "P1D"},
             "evalscript": STATS_EVALSCRIPT,
-            "resx": 10,
-            "resy": 10,
+            # Bounds are CRS84 (degrees), so a value of 10 here would mean
+            # 10 degrees rather than 10 metres. Use ~10 m in WGS84 degrees
+            # at this latitude to obtain pixel-level farm statistics.
+            "resx": 0.0001,
+            "resy": 0.0001,
         },
     }
 
