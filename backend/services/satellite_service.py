@@ -149,10 +149,13 @@ def _search(
     cloud: float,
     limit: int = 20,
 ) -> list[dict[str, Any]]:
+    # Use the AOI bounding box for STAC scene discovery. The exact farm
+    # polygon is still used later by the Statistics/Process APIs, so this
+    # does not expand the area used for NDVI/NDRE/NDWI calculations.
     payload = {
         "collections": [COLLECTION],
         "datetime": f"{_iso(start)}/{_iso(end)}",
-        "intersects": geometry,
+        "bbox": _bbox(geometry),
         "query": {"eo:cloud_cover": {"lte": cloud}},
         "sortby": [{"field": "datetime", "direction": "desc"}],
         "limit": limit,
@@ -161,8 +164,9 @@ def _search(
     response = requests.post(STAC, json=payload, timeout=TIMEOUT)
 
     if response.status_code >= 400:
+        detail = response.text[:1000].replace("\n", " ")
         raise RuntimeError(
-            f"Copernicus Catalog search failed ({response.status_code})."
+            f"Copernicus Catalog search failed ({response.status_code}): {detail}"
         )
 
     return response.json().get("features", [])
