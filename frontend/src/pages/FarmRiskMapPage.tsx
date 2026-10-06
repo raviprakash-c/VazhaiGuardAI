@@ -334,17 +334,28 @@ export default function FarmRiskMapPage() {
       satellite?.farm_geometry?.is_farmer_confirmed,
   );
 
+  const hasDecisionRisk =
+    typeof decision?.risk?.score === "number" &&
+    Boolean(decision?.risk?.level);
+
   const score = Math.min(
     100,
-    Math.max(
-      0,
-      decision?.risk?.score ?? satellite?.risk_score ?? 0,
-    ),
+    Math.max(0, decision?.risk?.score ?? 0),
   );
 
-  const level =
-    decision?.risk?.level ?? levelFromScore(score);
-  const risk = riskText[level];
+  const level = hasDecisionRisk
+    ? (decision?.risk?.level as RiskLevel)
+    : "moderate";
+
+  const risk = hasDecisionRisk
+    ? riskText[level]
+    : {
+        title: "Evidence review",
+        tamil: "ஆதாரத்தை சரிபார்க்கவும்",
+        className: "border-violet-200 bg-violet-50 text-violet-900",
+        ring: "#6d28d9",
+        fill: "#8b5cf6",
+      };
 
   const confidence = Math.round(
     Math.min(
@@ -876,9 +887,7 @@ export default function FarmRiskMapPage() {
               </div>
 
               <div className="rounded-full bg-white/70 px-3 py-1 text-sm font-bold">
-                {statsQuality && satellite?.risk_score != null
-                  ? satellite.risk_score.toFixed(0) + "/100"
-                  : "Evidence only"}
+                {hasDecisionRisk ? score.toFixed(0) + "/100" : "Evidence only"}
               </div>
             </div>
 
@@ -889,15 +898,18 @@ export default function FarmRiskMapPage() {
               </p>
             </div>
 
-            <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10">
-              <div
-                className="h-full rounded-full bg-current transition-all duration-700"
-                style={{
-                  width:
-                    Math.min(100, Math.max(0, score)) + "%",
-                }}
-              />
-            </div>
+            {hasDecisionRisk ? (
+              <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10">
+                <div
+                  className="h-full rounded-full bg-current transition-all duration-700"
+                  style={{ width: Math.min(100, Math.max(0, score)) + "%" }}
+                />
+              </div>
+            ) : (
+              <div className="mt-4 rounded-xl border border-violet-200 bg-white/60 p-3 text-xs">
+                No fused decision is available yet. Satellite values are shown as evidence, not as a disease-risk score.
+              </div>
+            )}
           </div>
 
           <div className="rounded-[24px] border border-[#dfe9e2] bg-white p-5 shadow-sm">
