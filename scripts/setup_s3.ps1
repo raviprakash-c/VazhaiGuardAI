@@ -23,8 +23,11 @@ Write-Host "Region:      $Region"
 Write-Host ""
 Write-Host "[2/5] Checking bucket..."
 
-$headOutput = aws s3api head-bucket --bucket $Bucket --profile $Profile 2>&1
+$previousErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
+$headOutput = & aws s3api head-bucket --bucket $Bucket --profile $Profile 2>&1
 $headExit = $LASTEXITCODE
+$ErrorActionPreference = $previousErrorActionPreference
 
 if ($headExit -eq 0) {
     Write-Host "Bucket already exists and is accessible."
