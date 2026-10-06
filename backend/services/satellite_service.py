@@ -194,13 +194,23 @@ function setup() {
     }],
     output: [
       {
-        id: "indices",
-        bands: ["ndvi", "ndre", "ndwi"],
+        id: "ndvi",
+        bands: 1,
+        sampleType: "FLOAT32"
+      },
+      {
+        id: "ndre",
+        bands: 1,
+        sampleType: "FLOAT32"
+      },
+      {
+        id: "ndwi",
+        bands: 1,
         sampleType: "FLOAT32"
       },
       {
         id: "dataMask",
-        bands: ["indices"]
+        bands: ["ndvi", "ndre", "ndwi"]
       }
     ]
   };
@@ -219,7 +229,9 @@ function evaluatePixel(s) {
   var mask = s.dataMask * (cloudy ? 0 : 1);
 
   return {
-    indices: [ndvi, ndre, ndwi],
+    ndvi: [ndvi],
+    ndre: [ndre],
+    ndwi: [ndwi],
     dataMask: [mask, mask, mask]
   };
 }
@@ -264,7 +276,7 @@ def _stats(
             "data": [
                 {
                     "type": COLLECTION,
-                    "dataFilter": {"timeRange": {"from": start, "to": end}},
+                    "dataFilter": {"mosaickingOrder": "mostRecent"},
                 }
             ],
         },
@@ -288,23 +300,23 @@ def _stats(
     )
 
     if response.status_code >= 400:
+        detail = response.text[:1000].replace("\n", " ")
         raise RuntimeError(
-            f"Copernicus statistics request failed ({response.status_code})."
+            f"Copernicus statistics request failed ({response.status_code}): {detail}"
         )
 
     data = response.json().get("data") or []
     if not data:
         return [None, None, None]
 
-    bands = (
-        data[0]
-        .get("outputs", {})
-        .get("indices", {})
-        .get("bands", {})
-    )
+    outputs = data[0].get("outputs", {})
 
     return [
-        _num((bands.get(name) or {}).get("stats", {}).get("mean"))
+        _num(
+            (((outputs.get(name) or {}).get("bands", {}).get("B0") or {})
+             .get("stats", {})
+             .get("mean"))
+        )
         for name in ("ndvi", "ndre", "ndwi")
     ]
 
