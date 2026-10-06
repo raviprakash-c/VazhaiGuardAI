@@ -48,6 +48,6 @@ The farmer-facing decision can still be generated, but durable evidence storage 
 
 ## IAM
 
-The backend needs s3:HeadBucket, s3:PutObject, and s3:GetObject on the inspection bucket.
+The backend needs s3:ListBucket on the inspection bucket and s3:PutObject/s3:GetObject on objects inside it.
 
 Do not make the inspection bucket public.
