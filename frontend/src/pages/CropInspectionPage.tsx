@@ -200,6 +200,63 @@ export default function CropInspectionPage() {
 
               <div className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Satellite evidence</p><h2 className="mt-1 text-lg font-bold text-[#13271d]">பண்ணை பகுதி நிலை</h2></div><span className={`rounded-full border px-3 py-1 text-xs font-bold ${satelliteIncluded ? "border-violet-200 bg-violet-50 text-violet-800" : "border-slate-200 bg-slate-50 text-slate-500"}`}>{satelliteIncluded ? "REAL SATELLITE" : "NOT INCLUDED"}</span></div><div className="mt-4 flex flex-wrap gap-2 text-[11px]"><span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-3 py-1 text-violet-700"><Satellite className="h-3 w-3" />Sentinel-2</span><span className="rounded-full bg-slate-50 px-3 py-1 text-slate-600">{farmLocationSource === "saved-farm" ? "Farmer-confirmed farm location" : farmLocationSource === "device" ? "Device GPS fallback" : "Location unavailable"}</span></div>{satelliteEvidence?.available ? <><div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4"><div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">NDVI</p><p className="mt-1 font-bold text-[#13271d]">{satelliteEvidence.ndvi?.toFixed(2) ?? "—"}</p></div><div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">NDRE</p><p className="mt-1 font-bold text-[#13271d]">{satelliteEvidence.ndre?.toFixed(2) ?? "—"}</p></div><div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">NDWI</p><p className="mt-1 font-bold text-[#13271d]">{satelliteEvidence.ndwi?.toFixed(2) ?? "—"}</p></div><div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">Source</p><p className="mt-1 font-bold text-[#13271d]">Sentinel-2 L2A</p></div></div><div className="mt-3 grid gap-2 sm:grid-cols-3"><div className="rounded-xl border border-[#e5ece7] p-3"><p className="text-[10px] font-bold uppercase text-[#718078]">Vegetation trend</p><p className="mt-1 text-sm font-semibold text-[#13271d]">{satelliteEvidence.trend || "—"}</p></div><div className="rounded-xl border border-[#e5ece7] p-3"><p className="text-[10px] font-bold uppercase text-[#718078]">Latest observation</p><p className="mt-1 text-sm font-semibold text-[#13271d]">{satelliteEvidence.observation_age_hours != null ? `${Math.max(0, Math.round(satelliteEvidence.observation_age_hours / 24))} days ago` : "—"}</p></div><div className="rounded-xl border border-[#e5ece7] p-3"><p className="text-[10px] font-bold uppercase text-[#718078]">Cloud quality</p><p className="mt-1 text-sm font-semibold text-[#13271d]">{satelliteEvidence.cloud_percent_mean != null ? `${satelliteEvidence.cloud_percent_mean.toFixed(0)}% scene cloud` : "—"}</p></div></div>{satelliteEvidence.warnings?.length ? <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs leading-5 text-amber-800">{satelliteEvidence.warnings[0]}</div> : null}</> : <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm leading-6 text-slate-600">{satelliteEvidence?.reason || "Satellite evidence was not available. Photo and weather evidence can still be used."}</div>}</div>
 
+              <div className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm sm:p-6">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Output evaluation</p>
+                    <h2 className="mt-1 text-lg font-bold text-[#13271d]">Decision quality gate</h2>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-bold ${
+                    result.evaluation.grade === "pass"
+                      ? "bg-emerald-50 text-emerald-700"
+                      : result.evaluation.grade === "review"
+                        ? "bg-amber-50 text-amber-800"
+                        : "bg-red-50 text-red-700"
+                  }`}>
+                    {result.evaluation.grade.toUpperCase()}
+                  </span>
+                </div>
+                <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="rounded-xl bg-[#f8fbf9] p-3">
+                    <p className="text-[10px] uppercase text-[#718078]">Quality score</p>
+                    <p className="mt-1 text-xl font-bold text-[#13271d]">
+                      {Math.round(result.evaluation.quality_score * 100)}%
+                    </p>
+                  </div>
+                  <div className="rounded-xl bg-[#f8fbf9] p-3">
+                    <p className="text-[10px] uppercase text-[#718078]">Field verification</p>
+                    <p className="mt-1 text-sm font-bold text-[#13271d]">
+                      {result.evaluation.requires_field_verification ? "Required" : "Not required"}
+                    </p>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {Object.entries(result.evaluation.checks).slice(0, 6).map(([name, passed]) => (
+                    <span
+                      key={name}
+                      className={`rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                        passed ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700"
+                      }`}
+                    >
+                      {passed ? "✓" : "!"} {name.replaceAll("_", " ")}
+                    </span>
+                  ))}
+                </div>
+                {result.evaluation.issues.length > 0 && (
+                  <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                    <p className="text-xs font-bold text-amber-900">Quality warnings</p>
+                    <ul className="mt-2 space-y-1 text-[11px] leading-5 text-amber-900">
+                      {result.evaluation.issues.slice(0, 3).map((issue) => (
+                        <li key={issue.code}>• {issue.message}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                <p className="mt-3 text-[10px] leading-4 text-[#718078]">
+                  Deterministic evaluator checks evidence trace, uncertainty, freshness and recommendation safety. It does not diagnose the crop.
+                </p>
+              </div>
+
               <div className="rounded-[28px] border border-[#dfe9e2] bg-white p-5 shadow-sm sm:p-6"><div className="flex items-start justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.12em] text-[#718078]">Unified risk engine</p><h2 className="mt-1 text-lg font-bold text-[#13271d]">Evidence-fused farmer action</h2></div><span className={`rounded-full border px-3 py-1 text-xs font-bold uppercase ${riskStyle[result.risk.level]}`}>{result.risk.level} • {result.risk.score}/100</span></div><div className="mt-4 grid grid-cols-3 gap-2"><div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">Photo</p><p className="mt-1 font-bold text-[#13271d]">{Math.round(result.signal_scores.vision)}</p></div><div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">Weather</p><p className="mt-1 font-bold text-[#13271d]">{weatherLoaded ? Math.round(result.signal_scores.weather) : "—"}</p></div><div className="rounded-xl bg-[#f8fbf9] p-3 text-center"><p className="text-[10px] text-[#718078]">Satellite</p><p className="mt-1 font-bold text-[#13271d]">{satelliteIncluded ? Math.round(result.signal_scores.satellite) : "—"}</p></div></div><div className="mt-3 flex flex-wrap gap-2 text-[11px]"><span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${weatherLoaded ? "bg-sky-50 text-sky-700" : "bg-slate-50 text-slate-500"}`}><CloudRain className="h-3 w-3" />{weatherLoaded ? "Live weather included" : "Weather unavailable"}</span><span className={`inline-flex items-center gap-1 rounded-full px-3 py-1 ${satelliteIncluded ? "bg-violet-50 text-violet-700" : "bg-slate-50 text-slate-500"}`}><Satellite className="h-3 w-3" />{satelliteIncluded ? "Satellite included" : "Satellite not supplied"}</span></div><div className="mt-4 rounded-2xl bg-[#073b2a] p-4 text-white"><p className="text-sm font-semibold leading-6">{result.decision.summary}</p><div className="mt-3 space-y-2">{result.decision.priority_actions.map((item) => <div key={`${item.priority}-${item.action}`} className="rounded-xl bg-white/10 p-3"><p className="text-xs font-bold">{item.priority}. {item.action}</p><p className="mt-1 text-[11px] leading-5 text-white/70">{item.reason}</p></div>)}</div>{result.decision.follow_up_check && <p className="mt-3 text-xs leading-5 text-white/80">களச் சரிபார்ப்பு: {result.decision.follow_up_check}</p>}{result.decision.recheck_after && <p className="mt-1 text-xs leading-5 text-white/80">மீண்டும் பார்க்க: {result.decision.recheck_after}</p>}<div className="mt-3 rounded-xl border border-white/15 bg-white/10 p-3 text-sm leading-6">{result.action}</div><Button onClick={speakAdvice} variant="outline" className="mt-3 rounded-xl border-white/20 bg-white/10 text-white hover:bg-white/20"><Volume2 className="mr-2 h-4 w-4" />{isSpeaking ? "Speaking..." : "தமிழில் கேளுங்கள்"}</Button></div><p className="mt-3 text-[10px] text-[#718078]">Decision model: {result.decision_model} • Signals: {result.risk.signals_used.join(", ") || "none"}</p><div className="mt-4 flex flex-col gap-2 sm:flex-row"><Button onClick={() => navigate("/copilot")} className="rounded-xl bg-[#146c43] hover:bg-[#0f5836]">Continue with Copilot</Button><Button onClick={() => navigate("/risk-map")} variant="outline" className="rounded-xl border-[#dfe9e2] bg-white">View farm risk map</Button></div></div>
             </>}
           </section>
