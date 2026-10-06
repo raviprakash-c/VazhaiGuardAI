@@ -34,11 +34,10 @@ import {
   getSatelliteEvidence,
   getSatelliteLayer,
   getSatellitePreview,
-} from "../services/satelliteApi";
-import { getSavedFarm } from "../services/farmMapApi";
   type SatelliteEvidence,
   type SatelliteLayer,
 } from "../services/satelliteApi";
+import { getSavedFarm } from "../services/farmMapApi";
 
 const DEFAULT_CENTER: LatLngExpression = [9.5, 77.5];
 const MAPBOX_TOKEN = import.meta.env.VITE_MAPBOX_TOKEN as string | undefined;
