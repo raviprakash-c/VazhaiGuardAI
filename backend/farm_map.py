@@ -319,6 +319,12 @@ def save_farm_location(
 
             boundary_source=
                 request.boundary_source,
+
+            parcel_id=
+                request.parcel_id,
+
+            parcel_metadata=
+                request.parcel_metadata,
         )
 
         print(
