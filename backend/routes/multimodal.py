@@ -15,6 +15,7 @@ from services.multimodal_service import (
     decode_data_url,
 )
 from services.unified_risk_engine import calculate_unified_risk
+from services.decision_evaluator import evaluate_multimodal_decision
 
 router = APIRouter(prefix="/ai/multimodal", tags=["multimodal-ai"])
 TEXT_MODEL_ID = os.getenv("VAZHAIGUARD_TEXT_MODEL", "mistral.ministral-3-8b-instruct")
@@ -263,14 +264,35 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
 
+    risk = {
+        "score": score,
+        "level": label,
+        "signals_used": signals_used,
+        "weights_used": weights_used,
+        "evidence_state": calculate_unified_risk(
+            vision=vision,
+            weather=request.weather_context,
+            satellite=request.satellite_context,
+            farm_context=request.farm_context,
+        ).get("evidence_state", {}),
+    }
+    evaluation = evaluate_multimodal_decision(
+        vision=vision,
+        weather=request.weather_context,
+        satellite=request.satellite_context,
+        risk=risk,
+        decision=decision,
+    )
+
     return {
         "zone_id": request.zone_id,
         "vision": vision,
-        "risk": {"score": score, "level": label, "signals_used": signals_used, "weights_used": weights_used},
+        "risk": risk,
         "signal_scores": signal_scores,
         "decision": decision,
+        "evaluation": evaluation,
         "action": decision.get("farmer_message", ""),
         "decision_model": TEXT_MODEL_ID,
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "source": "AWS Bedrock multimodal + unified risk engine + farmer decision agent",
+        "source": "AWS Bedrock multimodal + deterministic evidence fusion + decision evaluator",
     }
