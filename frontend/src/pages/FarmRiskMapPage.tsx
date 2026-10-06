@@ -12,6 +12,7 @@ import {
   MapPinned,
   RefreshCw,
   Satellite,
+  ShieldCheck,
   Volume2,
   Wind,
 } from "lucide-react";
@@ -32,6 +33,7 @@ import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
 import {
   getSatelliteEvidence,
   getSatelliteLayer,
+  getSatellitePreview,
   type SatelliteEvidence,
   type SatelliteLayer,
 } from "../services/satelliteApi";
@@ -294,9 +296,10 @@ export default function FarmRiskMapPage() {
   );
 
   const [activeLayer, setActiveLayer] = useState<
-    SatelliteLayer | "base"
+    SatelliteLayer | "base" | "sentinel"
   >("stress");
   const [layerUrls, setLayerUrls] = useState<LayerState>({});
+  const [sentinelPreviewUrl, setSentinelPreviewUrl] = useState<string | null>(null);
   const [showSatellite, setShowSatellite] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingLayer, setLoadingLayer] = useState(false);
@@ -368,9 +371,26 @@ export default function FarmRiskMapPage() {
   );
 
   const currentLayerUrl =
-    activeLayer === "base"
+    activeLayer === "base" || activeLayer === "sentinel"
       ? null
       : layerUrls[activeLayer] || null;
+
+  const currentSentinelUrl =
+    activeLayer === "sentinel" ? sentinelPreviewUrl : null;
+
+  const stats = satellite?.statistics_quality;
+  const baselineStats = satellite?.baseline_statistics_quality;
+  const validPixels = stats?.indices?.ndvi?.sampleCount ?? null;
+  const noDataPixels = stats?.indices?.ndvi?.noDataCount ?? null;
+  const statsQuality = stats?.quality === "valid_statistics";
+  const trendLabel =
+    satellite?.trend === "improving"
+      ? "Improving"
+      : satellite?.trend === "declining"
+        ? "Declining"
+        : satellite?.trend === "stable"
+          ? "Stable"
+          : "Insufficient history";
 
   const loadLayer = useCallback(
     async (layer: SatelliteLayer) => {
@@ -462,17 +482,22 @@ export default function FarmRiskMapPage() {
       setLayerUrls({});
 
       if (result.available) {
-        const layerToLoad =
-          activeLayer === "base" ? "stress" : activeLayer;
+        if (activeLayer === "sentinel") {
+          const nextPreview = await getSatellitePreview(input);
+          setSentinelPreviewUrl(nextPreview);
+        } else {
+          const layerToLoad =
+            activeLayer === "base" ? "stress" : activeLayer;
 
-        const nextUrl = await getSatelliteLayer(
-          input,
-          layerToLoad,
-        );
+          const nextUrl = await getSatelliteLayer(
+            input,
+            layerToLoad,
+          );
 
-        setLayerUrls({
-          [layerToLoad]: nextUrl,
-        });
+          setLayerUrls({
+            [layerToLoad]: nextUrl,
+          });
+        }
       }
     } catch (error) {
       setSatelliteError(
@@ -483,7 +508,7 @@ export default function FarmRiskMapPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [activeLayer, farm, layerUrls]);
+  }, [activeLayer, farm, layerUrls, sentinelPreviewUrl]);
 
   useEffect(() => {
     void refreshSatellite();
@@ -499,7 +524,38 @@ export default function FarmRiskMapPage() {
   }, [farm]);
 
   useEffect(() => {
-    if (activeLayer !== "base") {
+    if (activeLayer === "sentinel") {
+      const latitude = farm?.location?.latitude;
+      const longitude = farm?.location?.longitude;
+      if (typeof latitude !== "number" || typeof longitude !== "number") return;
+
+      const input = {
+        latitude,
+        longitude,
+        boundary: farm?.boundary as Record<string, unknown> | undefined,
+        lookbackDays: 45,
+        baselineDays: 45,
+        maxCloudPercent: 35,
+      };
+
+      setLoadingLayer(true);
+      setSatelliteError(null);
+      void getSatellitePreview(input)
+        .then((url) => {
+          setSentinelPreviewUrl((previous) => {
+            if (previous) URL.revokeObjectURL(previous);
+            return url;
+          });
+        })
+        .catch((error) => {
+          setSatelliteError(
+            error instanceof Error
+              ? error.message
+              : "Could not load Sentinel-2 true color.",
+          );
+        })
+        .finally(() => setLoadingLayer(false));
+    } else if (activeLayer !== "base") {
       void loadLayer(activeLayer);
     }
   }, [activeLayer, loadLayer]);
@@ -612,6 +668,15 @@ export default function FarmRiskMapPage() {
                 />
               )}
 
+              {showSatellite && currentSentinelUrl && (
+                <ImageOverlay
+                  url={currentSentinelUrl}
+                  bounds={imageBounds}
+                  opacity={0.82}
+                  zIndex={300}
+                />
+              )}
+
               {paths.map((path, index) => (
                 <Polygon
                   key={index}
@@ -678,7 +743,7 @@ export default function FarmRiskMapPage() {
               >
                 <p className="text-sm font-bold">{risk.tamil}</p>
                 <p className="text-xs">
-                  Farm-level risk • {score.toFixed(0)}/100
+                  Farm-level evidence • {confidence}% confidence
                 </p>
               </div>
             </div>
@@ -704,6 +769,20 @@ export default function FarmRiskMapPage() {
                     }
                   >
                     Visual satellite base
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveLayer("sentinel")}
+                    className={
+                      "w-full rounded-lg px-3 py-2 text-left text-xs font-semibold " +
+                      (activeLayer === "sentinel"
+                        ? "bg-violet-700 text-white"
+                        : "bg-violet-50 text-violet-800")
+                    }
+                  >
+                    Sentinel-2 true color
+                    <span className="ml-1 opacity-70">• real scene</span>
                   </button>
 
                   {(Object.keys(layerMeta) as SatelliteLayer[]).map(
@@ -797,8 +876,17 @@ export default function FarmRiskMapPage() {
               </div>
 
               <div className="rounded-full bg-white/70 px-3 py-1 text-sm font-bold">
-                {score.toFixed(0)}/100
+                {statsQuality && satellite?.risk_score != null
+                  ? satellite.risk_score.toFixed(0) + "/100"
+                  : "Evidence only"}
               </div>
+            </div>
+
+            <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-[11px] leading-4 text-amber-900">
+              <p className="font-bold">Interpretation note</p>
+              <p className="mt-0.5">
+                The satellite stress score is a prototype vegetation-stress heuristic, not a disease probability. Confirm plant-level symptoms with a farmer photo or field inspection.
+              </p>
             </div>
 
             <div className="mt-4 h-2 overflow-hidden rounded-full bg-black/10">
@@ -855,6 +943,44 @@ export default function FarmRiskMapPage() {
                     : "—"
                 }
               />
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-3">
+              <InfoCard
+                label="Valid pixels"
+                value={validPixels != null ? validPixels.toFixed(0) : "—"}
+              />
+              <InfoCard
+                label="No-data pixels"
+                value={noDataPixels != null ? noDataPixels.toFixed(0) : "—"}
+              />
+              <InfoCard
+                label="NDVI trend"
+                value={trendLabel}
+              />
+              <InfoCard
+                label="Stats quality"
+                value={statsQuality ? "Validated" : "Incomplete"}
+              />
+            </div>
+
+            <div className={
+              "mt-3 flex items-start gap-2 rounded-xl border p-3 text-[11px] leading-4 " +
+              (statsQuality
+                ? "border-emerald-100 bg-emerald-50 text-emerald-900"
+                : "border-amber-100 bg-amber-50 text-amber-900")
+            }>
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+              <div>
+                <p className="font-bold">
+                  {statsQuality ? "Farm-level statistics validated" : "Statistics need verification"}
+                </p>
+                <p className="mt-0.5">
+                  {statsQuality
+                    ? "Measurements are based on multiple valid Sentinel-2 pixels inside the farm boundary."
+                    : "Do not use the stress score as a decision signal until statistics are complete."}
+                </p>
+              </div>
             </div>
 
             <div className="mt-3 rounded-xl border border-violet-100 bg-violet-50 p-3">
