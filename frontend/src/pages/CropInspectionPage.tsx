@@ -355,6 +355,26 @@ export default function CropInspectionPage() {
                   </div>
                 </details>
 
+                {result.comparison?.available && (
+                  <div className={result.comparison.status === "worsened" ? "rounded-[30px] border border-red-200 bg-red-50 p-5 shadow-sm sm:p-6" : result.comparison.status === "improved" ? "rounded-[30px] border border-emerald-200 bg-emerald-50 p-5 shadow-sm sm:p-6" : "rounded-[30px] border border-[#dce8df] bg-white p-5 shadow-sm sm:p-6"}>
+                    <div className="flex items-start gap-3">
+                      <div className="mt-0.5 rounded-xl bg-white/80 p-2"><CheckCircle2 className="h-5 w-5 text-[#146c43]" /></div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#146c43]">REINSPECTION RESULT</p>
+                        <h2 className="mt-1 text-xl font-bold text-[#13271d]">{result.comparison.headline}</h2>
+                        <p className="mt-2 text-sm leading-6 text-[#596a60]">{result.comparison.summary}</p>
+                      </div>
+                      <span className="rounded-full bg-white px-3 py-1 text-[10px] font-bold uppercase text-[#146c43]">{result.comparison.status}</span>
+                    </div>
+                    <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                      <div className="rounded-2xl bg-white/80 p-3"><p className="text-[9px] font-bold uppercase text-[#718078]">Risk change</p><p className="mt-1 text-lg font-black text-[#13271d]">{result.comparison.risk.change == null ? "—" : `${result.comparison.risk.change > 0 ? "+" : ""}${result.comparison.risk.change}`}</p><p className="text-[10px] text-[#718078]">previous → current</p></div>
+                      <div className="rounded-2xl bg-white/80 p-3"><p className="text-[9px] font-bold uppercase text-[#718078]">New signals</p><p className="mt-1 text-sm font-bold text-[#13271d]">{result.comparison.signals.new.length ? result.comparison.signals.new.slice(0, 2).join(", ") : "None detected"}</p></div>
+                      <div className="rounded-2xl bg-white/80 p-3"><p className="text-[9px] font-bold uppercase text-[#718078]">Cleared</p><p className="mt-1 text-sm font-bold text-[#13271d]">{result.comparison.signals.cleared.length ? result.comparison.signals.cleared.slice(0, 2).join(", ") : "None yet"}</p></div>
+                    </div>
+                    <div className="mt-3 rounded-2xl bg-[#073b2a] p-3.5 text-sm leading-6 text-white"><span className="font-bold text-[#b8df4b]">NEXT:</span> {result.comparison.next_step}</div>
+                  </div>
+                )}
+
                 <div className="rounded-[30px] border border-[#dce8df] bg-white p-5 shadow-sm sm:p-6">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                     <div>
