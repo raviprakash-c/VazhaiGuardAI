@@ -15,6 +15,7 @@ from services.inspection_storage import create_inspection_record, s3_health, sav
 from services.multimodal_service import analyze_crop_image, decode_data_url
 from services.reinspection_engine import compare_inspection_records
 from services.agentic_reinspection import plan_next_inspection
+from services.farm_timeline import build_farm_timeline
 from services.unified_risk_engine import calculate_unified_risk
 
 router = APIRouter(prefix="/ai/inspections", tags=["inspection-evidence"])
@@ -133,6 +134,31 @@ def reinspect(request: ReinspectionRequest) -> dict[str, Any]:
         result["inspection_storage"] = {"stored": False, "status": "storage_error", "error": str(exc)}
 
     return result
+
+
+@router.get("/{farm_id}/timeline")
+def inspection_timeline(farm_id: str) -> dict[str, Any]:
+    farm = get_farm(farm_id)
+    if not farm:
+        raise HTTPException(status_code=404, detail="Farm was not found.")
+
+    history = list(farm.get("inspection_history") or [])
+    weather = None
+    try:
+        from weather import get_weather
+        location = farm.get("location") or {}
+        latitude = location.get("latitude")
+        longitude = location.get("longitude")
+        if latitude is not None and longitude is not None:
+            weather = asyncio.run(get_weather(float(latitude), float(longitude)))
+    except Exception:
+        weather = None
+
+    return build_farm_timeline(
+        farm_id=farm_id,
+        history=history,
+        current_weather=weather,
+    )
 
 
 @router.get("/{farm_id}/next-action")
