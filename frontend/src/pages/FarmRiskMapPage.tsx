@@ -278,12 +278,25 @@ export default function FarmRiskMapPage() {
     ]),
   );
 
-  const [farm, setFarm] = useState<SavedFarm | null>(() =>
-    readObject<SavedFarm>([
+  const [farm, setFarm] = useState<SavedFarm | null>(() => {
+    const selectedFarmId = localStorage.getItem("vazhaiguard_farm_id");
+    const cachedFarm = readObject<SavedFarm>([
       "vazhaiguard_farm_complete",
       "vazhaiguard:farm",
-    ]),
-  );
+    ]);
+
+    // Never render a cached farm when an explicitly selected farm ID points
+    // to a different farm. The selected ID is the source of truth.
+    if (
+      selectedFarmId &&
+      cachedFarm?.farm_id &&
+      cachedFarm.farm_id !== selectedFarmId
+    ) {
+      return null;
+    }
+
+    return cachedFarm;
+  });
 
   const [satellite, setSatellite] = useState<SatelliteEvidence | null>(null);
 
@@ -302,9 +315,10 @@ export default function FarmRiskMapPage() {
   const { speak, isSpeaking } = useVoiceAssistant();
 
   useEffect(() => {
+    // The explicitly selected farm ID must win over any stale cached farm.
     const farmId =
-      farm?.farm_id ||
-      localStorage.getItem("vazhaiguard_farm_id");
+      localStorage.getItem("vazhaiguard_farm_id") ||
+      farm?.farm_id;
 
     if (!farmId) return;
 
@@ -320,6 +334,12 @@ export default function FarmRiskMapPage() {
           "vazhaiguard_farm_complete",
           JSON.stringify(canonicalFarm),
         );
+        if (canonicalFarm.farm_id) {
+          localStorage.setItem(
+            "vazhaiguard_farm_id",
+            canonicalFarm.farm_id,
+          );
+        }
       })
       .catch((error) => {
         console.warn(
@@ -1081,7 +1101,7 @@ export default function FarmRiskMapPage() {
                 }
               >
                 {farmerConfirmedBoundary
-                  ? "Farmer confirmed"
+                  ? "Boundary farmer-confirmed"
                   : "Needs confirmation"}
               </span>
             </div>
@@ -1140,8 +1160,9 @@ export default function FarmRiskMapPage() {
             </div>
 
             <p className="mt-3 text-[10px] leading-4 text-[#718078]">
-              This is a cadastral reference parcel supplied by the farm
-              records. It is not a legal ownership verification.
+              This boundary is a farmer-confirmed cadastral reference used
+              for map and satellite analysis. It is not a legal ownership
+              verification or proof of title.
             </p>
           </div>
 
