@@ -279,7 +279,13 @@ def _stats(
 
     payload = {
         "input": {
-            "bounds": {"geometry": geometry},
+            "bounds": {
+                "bbox": _bbox(geometry),
+                "geometry": geometry,
+                "properties": {
+                    "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
+                },
+            },
             "data": [
                 {
                     "type": COLLECTION,
