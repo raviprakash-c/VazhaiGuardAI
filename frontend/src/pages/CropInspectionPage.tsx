@@ -407,7 +407,7 @@ export default function CropInspectionPage() {
                     )}
                     <div className="mt-5">
                       {farmTimeline.timeline.slice(0, 5).map((entry, index) => (
-                        <div key={entry.inspection_id || ${`${entry.sequence}-${entry.date}`${} className="relative flex gap-3 pb-5">
+                        <div key={entry.inspection_id || `${entry.sequence}-${entry.date}`} className="relative flex gap-3 pb-5">
                           {index < Math.min(farmTimeline.timeline.length, 5) - 1 && <div className="absolute left-[11px] top-6 h-full w-px bg-[#dce8df]" />}
                           <div className="relative z-10 mt-1 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-[#073b2a] text-[9px] font-black text-white">{entry.sequence}</div>
                           <div className="min-w-0 flex-1 rounded-2xl border border-[#e5ece7] bg-[#f8fbf8] p-3.5">
