@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from zoneinfo import ZoneInfo
 from typing import Any
 
 from services.agentic_reinspection import plan_next_inspection
@@ -19,7 +20,7 @@ def _format_date(value: Any) -> str:
     parsed = _parse_iso(value)
     if not parsed:
         return "Date unavailable"
-    return parsed.astimezone(timezone.utc).strftime("%d %b %Y, %I:%M %p UTC")
+    return parsed.astimezone(ZoneInfo("Asia/Kolkata")).strftime("%d %b %Y, %I:%M %p")
 
 
 def _risk_score(record: dict[str, Any]) -> float | None:
