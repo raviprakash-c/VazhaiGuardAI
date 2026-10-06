@@ -252,7 +252,7 @@ function setup() {
 }
 
 function evaluatePixel(s) {
-  var cloudy = [3, 7, 8, 9, 10, 11].includes(s.SCL);
+  var invalid = [1, 2, 3, 7, 8, 9, 10, 11].includes(s.SCL);
   var ndviDenominator = s.B08 + s.B04;
   var ndreDenominator = s.B8A + s.B05;
   var ndwiDenominator = s.B03 + s.B08;
@@ -261,7 +261,10 @@ function evaluatePixel(s) {
   var ndre = ndreDenominator === 0 ? 0 : (s.B8A - s.B05) / ndreDenominator;
   var ndwi = ndwiDenominator === 0 ? 0 : (s.B03 - s.B08) / ndwiDenominator;
 
-  var mask = s.dataMask * (cloudy ? 0 : 1);
+  var ndviValid = ndviDenominator !== 0;
+  var ndreValid = ndreDenominator !== 0;
+  var ndwiValid = ndwiDenominator !== 0;
+  var mask = s.dataMask * (invalid ? 0 : 1) * (ndviValid && ndreValid && ndwiValid ? 1 : 0);
 
   return {
     ndvi: [ndvi],
@@ -285,7 +288,7 @@ function setup() {
 }
 
 function evaluatePixel(s) {
-  var cloudy = [3, 7, 8, 9, 10, 11].includes(s.SCL);
+  var invalid = [1, 2, 3, 7, 8, 9, 10, 11].includes(s.SCL);
   var alpha = s.dataMask * (cloudy ? 0 : 1);
 
   return [
@@ -350,24 +353,28 @@ def _stats(
     if not data:
         return [None, None, None]
 
-    # The Statistics API returns one entry per aggregation interval. Find the
-    # interval containing valid pixels instead of assuming data[0] has them.
-    values: list[float | None] = []
-    for name in ("ndvi", "ndre", "ndwi"):
-        value = None
-        for interval in data:
-            outputs = interval.get("outputs") or {}
+    # The Statistics API returns one entry per aggregation interval.
+    # Each named output follows: outputs -> <output> -> bands -> B0 -> stats.
+    # Prefer the interval with the largest valid sample count.
+    best: dict[str, dict[str, float | None]] = {}
+    for interval in data:
+        outputs = interval.get("outputs") or {}
+        for name in ("ndvi", "ndre", "ndwi"):
             stats = (
                 ((outputs.get(name) or {}).get("bands", {}).get("B0") or {})
                 .get("stats")
                 or {}
             )
-            candidate = _num(stats.get("mean"))
-            if candidate is not None:
-                value = candidate
-                break
-        values.append(value)
+            sample_count = _num(stats.get("sampleCount")) or 0.0
+            current = best.get(name)
+            if current is None or sample_count > (current.get("sampleCount") or 0.0):
+                best[name] = {
+                    "mean": _num(stats.get("mean")),
+                    "sampleCount": sample_count,
+                    "noDataCount": _num(stats.get("noDataCount")) or 0.0,
+                }
 
+    values = [_num(best.get(name, {}).get("mean")) for name in ("ndvi", "ndre", "ndwi")]
     return values
 
 
@@ -411,11 +418,11 @@ function color(v) {
 }
 
 function evaluatePixel(s) {
-  var cloudy = [3, 7, 8, 9, 10, 11].includes(s.SCL);
+  var invalid = [1, 2, 3, 7, 8, 9, 10, 11].includes(s.SCL);
   var d = s.B08 + s.B04;
   var ndvi = d === 0 ? 0 : (s.B08 - s.B04) / d;
   var c = color(ndvi);
-  return [c[0], c[1], c[2], s.dataMask * (cloudy ? 0 : 0.72)];
+  return [c[0], c[1], c[2], s.dataMask * (invalid ? 0 : 0.72)];
 }
 """,
             10,
@@ -441,11 +448,11 @@ function color(v) {
 }
 
 function evaluatePixel(s) {
-  var cloudy = [3, 7, 8, 9, 10, 11].includes(s.SCL);
+  var invalid = [1, 2, 3, 7, 8, 9, 10, 11].includes(s.SCL);
   var d = s.B8A + s.B05;
   var ndre = d === 0 ? 0 : (s.B8A - s.B05) / d;
   var c = color(ndre);
-  return [c[0], c[1], c[2], s.dataMask * (cloudy ? 0 : 0.72)];
+  return [c[0], c[1], c[2], s.dataMask * (invalid ? 0 : 0.72)];
 }
 """,
             20,
@@ -471,11 +478,11 @@ function color(v) {
 }
 
 function evaluatePixel(s) {
-  var cloudy = [3, 7, 8, 9, 10, 11].includes(s.SCL);
+  var invalid = [1, 2, 3, 7, 8, 9, 10, 11].includes(s.SCL);
   var d = s.B03 + s.B08;
   var ndwi = d === 0 ? 0 : (s.B03 - s.B08) / d;
   var c = color(ndwi);
-  return [c[0], c[1], c[2], s.dataMask * (cloudy ? 0 : 0.68)];
+  return [c[0], c[1], c[2], s.dataMask * (invalid ? 0 : 0.68)];
 }
 """,
             10,
@@ -504,7 +511,7 @@ function clamp(v) {
 }
 
 function evaluatePixel(s) {
-  var cloudy = [3, 7, 8, 9, 10, 11].includes(s.SCL);
+  var invalid = [1, 2, 3, 7, 8, 9, 10, 11].includes(s.SCL);
   var ndviD = s.B08 + s.B04;
   var ndreD = s.B8A + s.B05;
   var ndwiD = s.B03 + s.B08;
@@ -519,7 +526,7 @@ function evaluatePixel(s) {
     0.20 * clamp((0.10 - ndwi) / 0.35);
 
   var c = color(score);
-  return [c[0], c[1], c[2], s.dataMask * (cloudy ? 0 : 0.68)];
+  return [c[0], c[1], c[2], s.dataMask * (invalid ? 0 : 0.68)];
 }
 """,
             10,
