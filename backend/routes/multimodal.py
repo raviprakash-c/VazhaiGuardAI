@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import time
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -16,12 +17,15 @@ from services.multimodal_service import (
 )
 from services.unified_risk_engine import calculate_unified_risk
 from services.decision_evaluator import evaluate_multimodal_decision
+from services.incident_engine import build_incident_and_action_plan
+from services.inspection_storage import create_inspection_record, save_inspection_record, store_photo
 
 router = APIRouter(prefix="/ai/multimodal", tags=["multimodal-ai"])
 TEXT_MODEL_ID = os.getenv("VAZHAIGUARD_TEXT_MODEL", "mistral.ministral-3-8b-instruct")
 
 
 class CropInspectionRequest(BaseModel):
+    farm_id: str | None = Field(default=None, max_length=100)
     image_data_url: str = Field(min_length=32, max_length=12_000_000)
     language: str = Field(default="ta-IN", min_length=2, max_length=16)
     farm_context: dict[str, Any] | None = None
@@ -317,8 +321,19 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         risk=risk,
         decision=decision,
     )
+    incident = build_incident_and_action_plan(
+        vision=vision,
+        weather=request.weather_context,
+        satellite=request.satellite_context,
+        evaluation=evaluation,
+        farm_context=request.farm_context,
+    )
 
-    return {
+    inspection_id = f"insp_{uuid.uuid4().hex[:12]}"
+    result = {
+        "inspection_id": inspection_id,
+        "parent_inspection_id": None,
+        "farm_id": request.farm_id,
         "zone_id": request.zone_id,
         "vision": vision,
         "risk": risk,
@@ -327,6 +342,39 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         "evaluation": evaluation,
         "action": decision.get("farmer_message", ""),
         "decision_model": TEXT_MODEL_ID,
+        "incident": incident,
+        "action_plan": incident,
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "source": "AWS Bedrock multimodal + deterministic evidence fusion + decision evaluator",
+        "source": "AWS Bedrock multimodal + deterministic evidence fusion + incident/action engine",
     }
+
+    if request.farm_id:
+        try:
+            storage = store_photo(
+                farm_id=request.farm_id,
+                inspection_id=inspection_id,
+                image_bytes=image_bytes,
+                content_type=content_type,
+            )
+            record = create_inspection_record(
+                farm_id=request.farm_id,
+                inspection_id=inspection_id,
+                parent_inspection_id=None,
+                result=result,
+                storage=storage,
+            )
+            save_inspection_record(farm_id=request.farm_id, record=record)
+            result["inspection_storage"] = storage
+        except Exception as exc:
+            result["inspection_storage"] = {
+                "stored": False,
+                "status": "storage_error",
+                "error": str(exc),
+            }
+    else:
+        result["inspection_storage"] = {
+            "stored": False,
+            "status": "farm_id_required",
+        }
+
+    return result
