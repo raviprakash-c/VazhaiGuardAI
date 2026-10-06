@@ -188,6 +188,18 @@ export default function CropInspectionPage() {
   };
 
   const startReinspection = () => {
+    try {
+      const raw = localStorage.getItem("vazhaiguard_farm_complete");
+      const saved = raw ? JSON.parse(raw) as Record<string, unknown> : null;
+      const farmId = String(saved?.farm_id || saved?.farmId || "");
+      if (!farmId) {
+        setError("Farm ID is missing. Re-save the farm before starting a reinspection.");
+        return;
+      }
+    } catch {
+      setError("Farm information could not be read. Please re-save the farm.");
+      return;
+    }
     setReinspectMode(true);
     setError("");
     inputRef.current?.click();
