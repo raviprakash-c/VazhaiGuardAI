@@ -730,12 +730,16 @@ export default function FarmRiskMapPage() {
                 <p className="text-xs font-bold text-violet-900">
                   {activeLayer === "base"
                     ? "High-resolution visual imagery"
-                    : layerMeta[activeLayer].label}
+                    : activeLayer === "sentinel"
+                      ? "Sentinel-2 true color"
+                      : layerMeta[activeLayer as SatelliteLayer].label}
                 </p>
                 <p className="mt-0.5 text-[11px] text-violet-700">
                   {activeLayer === "base"
                     ? "Mapbox satellite basemap"
-                    : layerMeta[activeLayer].description}
+                    : activeLayer === "sentinel"
+                      ? "Real Copernicus Sentinel-2 L2A scene"
+                      : layerMeta[activeLayer as SatelliteLayer].description}
                 </p>
               </div>
 
