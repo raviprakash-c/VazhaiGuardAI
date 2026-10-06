@@ -97,6 +97,12 @@ WEATHER EVIDENCE:
 SATELLITE EVIDENCE:
 {satellite or {}}
 
+EVIDENCE FRESHNESS/POLICY:
+- Sentinel-2 is periodic farm/zone evidence, not a live plant sensor.
+- If satellite evidence is stale, use it only as historical context and never let it drive a current plant-level conclusion.
+- Current farmer photo and current field checks take precedence over stale satellite evidence.
+- If evidence conflicts or visual confidence is weak, explicitly request field verification.
+
 FARM CONTEXT:
 {farm_context or {}}
 
