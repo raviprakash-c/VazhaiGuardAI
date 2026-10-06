@@ -120,7 +120,6 @@ export async function inspectCropImage(input: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      farm_id: input.farmId || null,
       image_data_url: input.imageDataUrl,
       language: input.language || "ta-IN",
       zone_id: input.zoneId || null,
@@ -151,6 +150,7 @@ export async function inspectAndDecide(input: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      farm_id: input.farmId || null,
       image_data_url: input.imageDataUrl,
       language: input.language || "ta-IN",
       zone_id: input.zoneId || null,
