@@ -19,11 +19,7 @@ export interface CropInspectionResult {
 
 export interface FarmerDecision {
   summary: string;
-  priority_actions: Array<{
-    priority: number;
-    action: string;
-    reason: string;
-  }>;
+  priority_actions: Array<{ priority: number; action: string; reason: string }>;
   follow_up_check: string;
   recheck_after: string;
   needs_field_verification: boolean;
@@ -32,17 +28,8 @@ export interface FarmerDecision {
 
 export interface RiskFusionResult {
   zone_id: string | null;
-  risk: {
-    score: number;
-    level: "low" | "moderate" | "high";
-    signals_used: string[];
-    weights_used?: Record<string, number>;
-  };
-  signal_scores: {
-    vision: number;
-    weather: number;
-    satellite: number;
-  };
+  risk: { score: number; level: "low" | "moderate" | "high"; signals_used: string[]; weights_used?: Record<string, number> };
+  signal_scores: { vision: number; weather: number; satellite: number };
   decision?: FarmerDecision;
   action: string;
   decision_model: string;
@@ -56,16 +43,8 @@ export interface DecisionEvaluation {
   decision_safe_to_show: boolean;
   requires_field_verification: boolean;
   checks: Record<string, boolean>;
-  issues: Array<{
-    code: string;
-    severity: "critical" | "high" | "medium" | "low";
-    message: string;
-  }>;
-  evidence_trace: {
-    signals_used: string[];
-    conflict_count: number;
-    satellite_freshness?: string;
-  };
+  issues: Array<{ code: string; severity: "critical" | "high" | "medium" | "low"; message: string }>;
+  evidence_trace: { signals_used: string[]; conflict_count: number; satellite_freshness?: string };
   evaluator: string;
 }
 
@@ -78,6 +57,19 @@ export interface IncidentActionPlan {
   actions: Array<{ priority: number; action: string; when: string; where: string; reason: string }>;
   field_verification_required: boolean;
   evidence_basis: Record<string, unknown>;
+  engine: string;
+}
+
+export interface InspectionComparison {
+  available: boolean;
+  status: "baseline" | "improved" | "stable" | "worsened" | "unknown";
+  headline: string;
+  summary: string;
+  risk: { previous: number | null; current: number | null; change: number | null; direction: string };
+  visual_confidence: { previous: number | null; current: number | null; change: number | null };
+  signals: { new: string[]; cleared: string[] };
+  incident: { previous: string | null; current: string };
+  next_step: string;
   engine: string;
 }
 
@@ -102,6 +94,7 @@ export interface InspectAndDecideResult extends CropInspectionResult {
   farm_id?: string | null;
   incident: IncidentActionPlan;
   action_plan: IncidentActionPlan;
+  comparison?: InspectionComparison;
   inspection_storage?: InspectionStorage;
   reinspection?: { is_reinspection: boolean; parent_inspection_id: string | null };
 }
@@ -109,136 +102,55 @@ export interface InspectAndDecideResult extends CropInspectionResult {
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 export async function inspectCropImage(input: {
-  imageDataUrl: string;
-  language?: string;
-  zoneId?: string;
-  farmContext?: Record<string, unknown>;
-  weatherContext?: Record<string, unknown>;
-  satelliteContext?: Record<string, unknown>;
+  imageDataUrl: string; language?: string; zoneId?: string;
+  farmContext?: Record<string, unknown>; weatherContext?: Record<string, unknown>; satelliteContext?: Record<string, unknown>;
 }): Promise<CropInspectionResult> {
   const response = await fetch(`${API_BASE}/ai/multimodal/inspect`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      image_data_url: input.imageDataUrl,
-      language: input.language || "ta-IN",
-      zone_id: input.zoneId || null,
-      farm_context: input.farmContext || null,
-      weather_context: input.weatherContext || null,
-      satellite_context: input.satelliteContext || null,
-    }),
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, farm_context: input.farmContext || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null }),
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Inspection failed (${response.status})`);
-  }
-
+  if (!response.ok) throw new Error((await response.text()) || `Inspection failed (${response.status})`);
   return response.json();
 }
 
 export async function inspectAndDecide(input: {
-  imageDataUrl: string;
-  farmId?: string;
-  language?: string;
-  zoneId?: string;
-  farmContext?: Record<string, unknown>;
-  weatherContext?: Record<string, unknown>;
-  satelliteContext?: Record<string, unknown>;
+  imageDataUrl: string; farmId?: string; language?: string; zoneId?: string;
+  farmContext?: Record<string, unknown>; weatherContext?: Record<string, unknown>; satelliteContext?: Record<string, unknown>;
 }): Promise<InspectAndDecideResult> {
   const response = await fetch(`${API_BASE}/ai/multimodal/inspect-and-decide`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      farm_id: input.farmId || null,
-      image_data_url: input.imageDataUrl,
-      language: input.language || "ta-IN",
-      zone_id: input.zoneId || null,
-      farm_context: input.farmContext || null,
-      weather_context: input.weatherContext || null,
-      satellite_context: input.satelliteContext || null,
-    }),
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ farm_id: input.farmId || null, image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, farm_context: input.farmContext || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null }),
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Multimodal decision failed (${response.status})`);
-  }
-
+  if (!response.ok) throw new Error((await response.text()) || `Multimodal decision failed (${response.status})`);
   return response.json();
 }
 
 export async function fuseRisk(input: {
-  vision: CropInspectionResult["vision"];
-  weather?: Record<string, unknown>;
-  satellite?: Record<string, unknown>;
-  farmContext?: Record<string, unknown>;
-  zoneId?: string;
-  language?: string;
+  vision: CropInspectionResult["vision"]; weather?: Record<string, unknown>; satellite?: Record<string, unknown>;
+  farmContext?: Record<string, unknown>; zoneId?: string; language?: string;
 }): Promise<RiskFusionResult> {
   const response = await fetch(`${API_BASE}/ai/multimodal/risk-fusion`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      vision: input.vision,
-      weather: input.weather || null,
-      satellite: input.satellite || null,
-      farm_context: input.farmContext || null,
-      zone_id: input.zoneId || null,
-      language: input.language || "ta-IN",
-    }),
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ vision: input.vision, weather: input.weather || null, satellite: input.satellite || null, farm_context: input.farmContext || null, zone_id: input.zoneId || null, language: input.language || "ta-IN" }),
   });
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Risk fusion failed (${response.status})`);
-  }
-
+  if (!response.ok) throw new Error((await response.text()) || `Risk fusion failed (${response.status})`);
   return response.json();
 }
-
 
 export async function reinspectCrop(input: {
-  farmId: string;
-  imageDataUrl: string;
-  language?: string;
-  zoneId?: string;
-  weatherContext?: Record<string, unknown>;
-  satelliteContext?: Record<string, unknown>;
+  farmId: string; imageDataUrl: string; language?: string; zoneId?: string;
+  weatherContext?: Record<string, unknown>; satelliteContext?: Record<string, unknown>;
 }): Promise<InspectAndDecideResult> {
-  const response = await fetch(
-    `${API_BASE}/ai/inspections/reinspect`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        farm_id: input.farmId,
-        image_data_url: input.imageDataUrl,
-        language: input.language || "ta-IN",
-        zone_id: input.zoneId || null,
-        weather_context: input.weatherContext || null,
-        satellite_context: input.satelliteContext || null,
-      }),
-    }
-  );
-
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Reinspection failed (${response.status})`);
-  }
-
+  const response = await fetch(`${API_BASE}/ai/inspections/reinspect`, {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ farm_id: input.farmId, image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null }),
+  });
+  if (!response.ok) throw new Error((await response.text()) || `Reinspection failed (${response.status})`);
   return response.json();
 }
 
-export async function getInspectionHistory(
-  farmId: string
-): Promise<{ farm_id: string; inspections: Array<Record<string, unknown>> }> {
-  const response = await fetch(
-    `${API_BASE}/ai/inspections/${encodeURIComponent(farmId)}/history`
-  );
-  if (!response.ok) {
-    const body = await response.text();
-    throw new Error(body || `Inspection history failed (${response.status})`);
-  }
+export async function getInspectionHistory(farmId: string): Promise<{ farm_id: string; inspections: Array<Record<string, unknown>> }> {
+  const response = await fetch(`${API_BASE}/ai/inspections/${encodeURIComponent(farmId)}/history`);
+  if (!response.ok) throw new Error((await response.text()) || `Inspection history failed (${response.status})`);
   return response.json();
 }
