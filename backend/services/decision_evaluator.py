@@ -193,16 +193,17 @@ def evaluate_multimodal_decision(
 
     quality_score = round(_clamp(base - penalty), 3)
     critical_or_high = any(issue["severity"] in {"critical", "high"} for issue in issues)
+    any_failed_check = any(value is False for value in checks.values())
 
     return {
         "quality_score": quality_score,
         "grade": (
             "fail" if critical_or_high or quality_score < 0.60
-            else "review" if quality_score < 0.80
+            else "review" if any_failed_check or quality_score < 0.80
             else "pass"
         ),
         "decision_safe_to_show": not any(
-            issue["severity"] == "critical" for issue in issues
+            issue["severity"] in {"critical", "high"} for issue in issues
         ),
         "requires_field_verification": needs_verification or bool(conflicts),
         "checks": checks,
