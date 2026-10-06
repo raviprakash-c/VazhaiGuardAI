@@ -193,8 +193,15 @@ function setup() {
       bands: ["B03", "B04", "B05", "B08", "B8A", "SCL", "dataMask"]
     }],
     output: [
-      { id: "indices", bands: 3, sampleType: "FLOAT32" },
-      { id: "dataMask", bands: 1 }
+      {
+        id: "indices",
+        bands: ["ndvi", "ndre", "ndwi"],
+        sampleType: "FLOAT32"
+      },
+      {
+        id: "dataMask",
+        bands: ["indices"]
+      }
     ]
   };
 }
@@ -213,7 +220,7 @@ function evaluatePixel(s) {
 
   return {
     indices: [ndvi, ndre, ndwi],
-    dataMask: [mask]
+    dataMask: [mask, mask, mask]
   };
 }
 """
@@ -298,7 +305,7 @@ def _stats(
 
     return [
         _num((bands.get(name) or {}).get("stats", {}).get("mean"))
-        for name in ("B0", "B1", "B2")
+        for name in ("ndvi", "ndre", "ndwi")
     ]
 
 
