@@ -50,12 +50,32 @@ export interface RiskFusionResult {
   source?: string;
 }
 
+export interface DecisionEvaluation {
+  quality_score: number;
+  grade: "pass" | "review" | "fail";
+  decision_safe_to_show: boolean;
+  requires_field_verification: boolean;
+  checks: Record<string, boolean>;
+  issues: Array<{
+    code: string;
+    severity: "critical" | "high" | "medium" | "low";
+    message: string;
+  }>;
+  evidence_trace: {
+    signals_used: string[];
+    conflict_count: number;
+    satellite_freshness?: string;
+  };
+  evaluator: string;
+}
+
 export interface InspectAndDecideResult extends CropInspectionResult {
   risk: RiskFusionResult["risk"];
   signal_scores: RiskFusionResult["signal_scores"];
   decision: FarmerDecision;
   action: string;
   decision_model: string;
+  evaluation: DecisionEvaluation;
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
