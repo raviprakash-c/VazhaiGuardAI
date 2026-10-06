@@ -69,6 +69,27 @@ export interface DecisionEvaluation {
   evaluator: string;
 }
 
+export interface IncidentActionPlan {
+  incident: string;
+  incidents: string[];
+  severity: "low" | "moderate" | "high";
+  when: { start?: string | null; end?: string | null; peak_rain?: string | null; peak_wind?: string | null };
+  where: string;
+  actions: Array<{ priority: number; action: string; when: string; where: string; reason: string }>;
+  field_verification_required: boolean;
+  evidence_basis: Record<string, unknown>;
+  engine: string;
+}
+
+export interface InspectionStorage {
+  stored: boolean;
+  status: string;
+  bucket?: string | null;
+  key?: string | null;
+  s3_uri?: string | null;
+  error?: string;
+}
+
 export interface InspectAndDecideResult extends CropInspectionResult {
   risk: RiskFusionResult["risk"];
   signal_scores: RiskFusionResult["signal_scores"];
@@ -76,6 +97,13 @@ export interface InspectAndDecideResult extends CropInspectionResult {
   action: string;
   decision_model: string;
   evaluation: DecisionEvaluation;
+  inspection_id: string;
+  parent_inspection_id: string | null;
+  farm_id?: string | null;
+  incident: IncidentActionPlan;
+  action_plan: IncidentActionPlan;
+  inspection_storage?: InspectionStorage;
+  reinspection?: { is_reinspection: boolean; parent_inspection_id: string | null };
 }
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -92,6 +120,7 @@ export async function inspectCropImage(input: {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      farm_id: input.farmId || null,
       image_data_url: input.imageDataUrl,
       language: input.language || "ta-IN",
       zone_id: input.zoneId || null,
@@ -111,6 +140,7 @@ export async function inspectCropImage(input: {
 
 export async function inspectAndDecide(input: {
   imageDataUrl: string;
+  farmId?: string;
   language?: string;
   zoneId?: string;
   farmContext?: Record<string, unknown>;
@@ -164,5 +194,51 @@ export async function fuseRisk(input: {
     throw new Error(body || `Risk fusion failed (${response.status})`);
   }
 
+  return response.json();
+}
+
+
+export async function reinspectCrop(input: {
+  farmId: string;
+  imageDataUrl: string;
+  language?: string;
+  zoneId?: string;
+  weatherContext?: Record<string, unknown>;
+  satelliteContext?: Record<string, unknown>;
+}): Promise<InspectAndDecideResult> {
+  const response = await fetch(
+    `${API_BASE}/ai/inspections/reinspect`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        farm_id: input.farmId,
+        image_data_url: input.imageDataUrl,
+        language: input.language || "ta-IN",
+        zone_id: input.zoneId || null,
+        weather_context: input.weatherContext || null,
+        satellite_context: input.satelliteContext || null,
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Reinspection failed (${response.status})`);
+  }
+
+  return response.json();
+}
+
+export async function getInspectionHistory(
+  farmId: string
+): Promise<{ farm_id: string; inspections: Array<Record<string, unknown>> }> {
+  const response = await fetch(
+    `${API_BASE}/ai/inspections/${encodeURIComponent(farmId)}/history`
+  );
+  if (!response.ok) {
+    const body = await response.text();
+    throw new Error(body || `Inspection history failed (${response.status})`);
+  }
   return response.json();
 }
