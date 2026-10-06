@@ -21,5 +21,7 @@ export interface WeatherData {
     max_wind_speed: number;
     max_wind_gust: number;
     peak_gust_time: string | null;
+    peak_rain_time: string | null;
+    peak_rain_probability: number;
   };
 }
