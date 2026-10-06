@@ -252,6 +252,17 @@ async def get_weather(
     )
 
     peak_gust_time = None
+    peak_rain_time = None
+    peak_rain_probability = 0.0
+
+    if rain_probabilities_24:
+        peak_rain_index = max(
+            range(len(rain_probabilities_24)),
+            key=lambda index: rain_probabilities_24[index],
+        )
+        peak_rain_probability = float(rain_probabilities_24[peak_rain_index])
+        if peak_rain_index < len(times):
+            peak_rain_time = times[peak_rain_index]
 
     if wind_gust_values_24:
 
@@ -341,6 +352,12 @@ async def get_weather(
 
             "peak_gust_time":
                 peak_gust_time,
+
+            "peak_rain_time":
+                peak_rain_time,
+
+            "peak_rain_probability":
+                peak_rain_probability,
         },
     }
 
