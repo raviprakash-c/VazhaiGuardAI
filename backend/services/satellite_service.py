@@ -77,6 +77,34 @@ def _geometry(
     return fallback, "60 m farm-location buffer", False
 
 
+def _canonical_polygon(geometry: dict[str, Any]) -> dict[str, Any]:
+    """Return a strict GeoJSON Polygon with [[lng, lat], ...] coordinate nesting."""
+    if geometry.get("type") != "Polygon":
+        raise ValueError("Satellite statistics currently require a Polygon farm boundary.")
+
+    coordinates = geometry.get("coordinates")
+    if not isinstance(coordinates, list) or len(coordinates) != 1:
+        raise ValueError("Farm Polygon must contain exactly one exterior ring.")
+
+    ring = coordinates[0]
+    if not isinstance(ring, list) or len(ring) < 4:
+        raise ValueError("Farm Polygon exterior ring is invalid.")
+
+    normalized: list[list[float]] = []
+    for point in ring:
+        if not isinstance(point, (list, tuple)) or len(point) < 2:
+            raise ValueError("Farm Polygon contains an invalid coordinate pair.")
+        normalized.append([float(point[0]), float(point[1])])
+
+    if normalized[0] != normalized[-1]:
+        normalized.append(normalized[0])
+
+    return {
+        "type": "Polygon",
+        "coordinates": [normalized],
+    }
+
+
 def _bbox(geometry: dict[str, Any]) -> list[float]:
     points: list[tuple[float, float]] = []
 
@@ -276,12 +304,12 @@ def _stats(
     scene_time: datetime,
 ) -> list[float | None]:
     start, end = _scene_window(scene_time)
+    stats_geometry = _canonical_polygon(geometry)
 
     payload = {
         "input": {
             "bounds": {
-                "bbox": _bbox(geometry),
-                "geometry": geometry,
+                "geometry": stats_geometry,
                 "properties": {
                     "crs": "http://www.opengis.net/def/crs/OGC/1.3/CRS84"
                 },
