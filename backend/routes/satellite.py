@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
 
-from services.satellite_service import analyze_satellite_evidence, render_true_color_preview, satellite_configuration_status
+from services.satellite_service import (\n    analyze_satellite_evidence,\n    render_index_layer,\n    render_true_color_preview,\n    satellite_configuration_status,\n)
 
 router = APIRouter(prefix="/ai/satellite", tags=["satellite-evidence"])
 
