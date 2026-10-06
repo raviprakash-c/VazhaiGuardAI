@@ -122,6 +122,7 @@ Return STRICT JSON only:
 Rules:
 1. Treat the photo as visual evidence, not a definitive disease diagnosis.
 2. Never invent weather, satellite, farm measurements, or treatment results.
+2a. Put immediate weather/storm preparation first when rain, wind, or other weather risk is present: say WHAT to do, WHEN to do it, and WHERE on the farm it applies.
 3. Missing evidence must remain missing; do not pretend satellite data exists.
 4. Give 2 or 3 practical actions, ordered by priority.
 5. Do not prescribe pesticide/fungicide dosage.
@@ -155,6 +156,10 @@ def _generate_farmer_decision(
         max_tokens=650,
         temperature=0.2,
     ).strip()
+    # Some Bedrock responses wrap valid JSON in Markdown fences.
+    # Remove them before parsing so farmer-facing output never leaks raw JSON.
+    if raw.startswith("```"):
+        raw = raw.removeprefix("```json").removesuffix("```").strip()
     try:
         result = extract_json(raw)
         if isinstance(result, dict) and result.get("farmer_message"):
