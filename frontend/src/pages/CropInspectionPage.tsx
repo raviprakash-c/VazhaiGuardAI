@@ -218,13 +218,6 @@ export default function CropInspectionPage() {
             "வழக்கமான பண்ணை பணிகளைத் தொடரலாம்; வானிலை மாற்றத்தை கவனிக்கவும்.",
           ];
 
-  const stormTitle =
-    weatherAlert === "high"
-      ? "கனமழை / பலத்த காற்றுக்கு தயாராகுங்கள்"
-      : weatherAlert === "moderate"
-        ? "மழை / காற்று — முன் தயாராகுங்கள்"
-        : "அடுத்த 24 மணி நேர வானிலை";
-
   const hourlyForecast = Array.isArray(next24?.hourly_forecast)
     ? next24.hourly_forecast as Array<Record<string, unknown>>
     : [];
