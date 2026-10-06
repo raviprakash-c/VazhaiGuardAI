@@ -11,6 +11,7 @@ from schemas.agent import AgentRequest, AgentResponse, RoutingDecision
 from services.bedrock_service import generate_text
 from services.model_router import route_request
 from services.multimodal_service import analyze_crop_image, decode_data_url
+from services.decision_evaluator import evaluate_multimodal_decision
 from routes.multimodal import _fuse_signals, _generate_farmer_decision
 
 
@@ -155,6 +156,29 @@ def _run_multimodal_evidence_loop(request: AgentRequest, trace: list[dict[str, A
         language=request.language,
     )
 
+    risk = {
+        "score": score,
+        "level": label,
+        "signals_used": signals_used,
+        "weights_used": weights_used,
+        "evidence_state": _fuse_signals(
+            vision,
+            request.weather_context,
+            request.satellite_context,
+            request.farm_context or request.context,
+        )[4],
+    }
+
+    # Evaluate the generated decision deterministically before exposing it
+    # through the agent loop.
+    evaluation = evaluate_multimodal_decision(
+        vision=vision,
+        weather=request.weather_context,
+        satellite=request.satellite_context,
+        risk=risk,
+        decision=decision,
+    )
+
     trace.append({
         "step": "decide",
         "status": "completed",
@@ -162,17 +186,21 @@ def _run_multimodal_evidence_loop(request: AgentRequest, trace: list[dict[str, A
         "decision_model": "mistral.ministral-3-8b-instruct",
         "risk_level": label,
     })
+    trace.append({
+        "step": "evaluate",
+        "status": "completed",
+        "agent": "deterministic-decision-evaluator",
+        "grade": evaluation["grade"],
+        "quality_score": evaluation["quality_score"],
+        "issue_count": len(evaluation["issues"]),
+    })
 
     request.context["multimodal_result"] = {
         "vision": vision,
-        "risk": {
-            "score": score,
-            "level": label,
-            "signals_used": signals_used,
-            "weights_used": weights_used,
-        },
+        "risk": risk,
         "signal_scores": signal_scores,
         "decision": decision,
+        "evaluation": evaluation,
     }
 
     return normalize_farmer_response(
