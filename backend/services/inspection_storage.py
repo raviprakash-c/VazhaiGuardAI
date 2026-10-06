@@ -66,7 +66,19 @@ def create_inspection_record(*, farm_id: str, inspection_id: str, parent_inspect
         "parent_inspection_id": parent_inspection_id,
         "created_at": _now(),
         "status": "REINSPECTION" if parent_inspection_id else "COMPLETED",
-        "photo": {"s3_key": storage.get("key"), "s3_uri": storage.get("s3_uri"), "stored": bool(storage.get("stored"))},
+        "photo": {
+            "s3_key": storage.get("key"),
+            "s3_uri": storage.get("s3_uri"),
+            "stored": bool(storage.get("stored")),
+            "status": storage.get("status"),
+        },
+        "inspection_storage": {
+            "stored": bool(storage.get("stored")),
+            "status": storage.get("status"),
+            "bucket": storage.get("bucket"),
+            "key": storage.get("key"),
+            "s3_uri": storage.get("s3_uri"),
+        },
         "incident": result.get("incident", {}),
         "action_plan": result.get("action_plan", {}),
         "risk": result.get("risk", {}),
@@ -79,4 +91,5 @@ def create_inspection_record(*, farm_id: str, inspection_id: str, parent_inspect
             "needs_field_verification": vision.get("needs_field_verification"),
             "stress_signals": vision.get("stress_signals", []),
         },
+        "action": result.get("action", ""),
     }

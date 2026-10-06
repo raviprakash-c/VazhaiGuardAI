@@ -131,7 +131,7 @@ def reinspect(request: ReinspectionRequest) -> dict[str, Any]:
         save_inspection_record(farm_id=request.farm_id, record=record)
         result["inspection_storage"] = storage
     except Exception as exc:
-        result["inspection_storage"] = {"stored": False, "status": "storage_error", "error": str(exc)}
+        raise HTTPException(status_code=503, detail=f"Inspection evidence could not be stored: {exc}") from exc
 
     return result
 
