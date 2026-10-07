@@ -1,6 +1,11 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import area from "@turf/area";
+import {
+  getSatelliteLayer,
+  getSatellitePreview,
+  type SatelliteLayer,
+} from "../../services/satelliteApi";
 
 import "leaflet/dist/leaflet.css";
 
@@ -16,8 +21,8 @@ export type FarmMapLocation = {
 };
 
 export type FarmPolygonGeometry = {
-  type: "Polygon";
-  coordinates: [number, number][][];
+  type: "Polygon" | "MultiPolygon";
+  coordinates: any;
 };
 
 export type PlotSelectData = {
@@ -101,9 +106,17 @@ function calculateBoundaryMetrics(
 
 function geometryToLeaflet(
   geometry: FarmPolygonGeometry,
-): L.LatLngExpression[][] {
-  return geometry.coordinates.map((ring) =>
-    ring.map(([lng, lat]) => [lat, lng] as L.LatLngExpression),
+): L.LatLngExpression[][] | L.LatLngExpression[][][] {
+  if (geometry.type === "Polygon") {
+    return geometry.coordinates.map((ring: [number, number][]) =>
+      ring.map(([lng, lat]) => [lat, lng] as L.LatLngExpression),
+    );
+  }
+
+  return geometry.coordinates.map((polygon: [number, number][][]) =>
+    polygon.map((ring) =>
+      ring.map(([lng, lat]) => [lat, lng] as L.LatLngExpression),
+    ),
   );
 }
 
@@ -128,12 +141,21 @@ export default function SatelliteMap({
   const drawingRef = useRef(false);
   const drawPointsRef = useRef<[number, number][]>([]);
   const drawPreviewRef = useRef<L.Polyline | null>(null);
+  const imageryLayerRef = useRef<L.ImageOverlay | null>(null);
+  const dropPinModeRef = useRef(dropPinMode);
+  const [mapLayer, setMapLayer] = useState<"street" | "true-color" | SatelliteLayer>("street");
+  const [imageryLoading, setImageryLoading] = useState(false);
+  const [imageryError, setImageryError] = useState("");
   const callbacksRef = useRef({
     onLocationChange,
     onBoundaryChange,
     onBoundaryMetricsChange,
     onPlotSelect,
   });
+
+  useEffect(() => {
+    dropPinModeRef.current = dropPinMode;
+  }, [dropPinMode]);
 
   useEffect(() => {
     callbacksRef.current = {
@@ -182,7 +204,7 @@ export default function SatelliteMap({
     markerRef.current = marker;
 
     const handleMapClick = (event: L.LeafletMouseEvent) => {
-      if (dropPinMode) {
+      if (dropPinModeRef.current) {
         callbacksRef.current.onLocationChange({
           latitude: event.latlng.lat,
           longitude: event.latlng.lng,
@@ -360,12 +382,12 @@ export default function SatelliteMap({
         featureLayer.on("click", (event: L.LeafletMouseEvent) => {
           L.DomEvent.stopPropagation(event);
           const geometry = feature.geometry;
-          if (geometry?.type !== "Polygon") return;
+          if (
+            !geometry ||
+            (geometry.type !== "Polygon" && geometry.type !== "MultiPolygon")
+          ) return;
 
-          const selectedGeometry: FarmPolygonGeometry = {
-            type: "Polygon",
-            coordinates: geometry.coordinates as [number, number][][],
-          };
+          const selectedGeometry = geometry as FarmPolygonGeometry;
 
           callbacksRef.current.onPlotSelect?.({
             geometry: selectedGeometry,
@@ -428,13 +450,93 @@ export default function SatelliteMap({
   }, [dropPinMode, startDrawSignal]);
 
   useEffect(() => {
-    return () => {
-      const map = mapRef.current;
-      if (map) {
-        (map as L.Map & { __finishDrawing?: () => void }).__finishDrawing?.();
+    const map = mapRef.current;
+    if (!map) return;
+
+    if (imageryLayerRef.current) {
+      map.removeLayer(imageryLayerRef.current);
+      imageryLayerRef.current = null;
+    }
+
+    if (mapLayer === "street") {
+      setImageryLoading(false);
+      setImageryError("");
+      return;
+    }
+
+    let cancelled = false;
+    let objectUrl: string | null = null;
+    setImageryLoading(true);
+    setImageryError("");
+
+    const loadLayer = async () => {
+      try {
+        const input = {
+          latitude: location.latitude,
+          longitude: location.longitude,
+          boundary: boundary || undefined,
+          lookbackDays: 45,
+          maxCloudPercent: 35,
+        };
+
+        const url =
+          mapLayer === "true-color"
+            ? await getSatellitePreview(input)
+            : await getSatelliteLayer(input, mapLayer);
+
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+
+        objectUrl = url;
+        const bounds = boundary
+          ? L.geoJSON({
+              type: "Feature",
+              properties: {},
+              geometry: boundary,
+            } as GeoJSON.Feature).getBounds()
+          : L.latLngBounds(
+              [location.latitude - 0.0006, location.longitude - 0.0008],
+              [location.latitude + 0.0006, location.longitude + 0.0008],
+            );
+
+        imageryLayerRef.current = L.imageOverlay(url, bounds, {
+          opacity: 0.78,
+          interactive: false,
+        }).addTo(map);
+
+        if (bounds.isValid()) {
+          map.fitBounds(bounds, {
+            padding: [60, 60],
+            maxZoom: 20,
+            animate: true,
+          });
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setImageryError(
+            error instanceof Error
+              ? error.message
+              : "Satellite layer is temporarily unavailable.",
+          );
+        }
+      } finally {
+        if (!cancelled) setImageryLoading(false);
       }
     };
-  }, []);
+
+    void loadLayer();
+
+    return () => {
+      cancelled = true;
+      if (imageryLayerRef.current) {
+        map.removeLayer(imageryLayerRef.current);
+        imageryLayerRef.current = null;
+      }
+      if (objectUrl) URL.revokeObjectURL(objectUrl);
+    };
+  }, [mapLayer, location.latitude, location.longitude, boundary]);
 
   return (
     <div className="relative h-[620px] w-full overflow-hidden rounded-[24px]">
