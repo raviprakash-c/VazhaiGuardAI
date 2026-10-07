@@ -243,6 +243,7 @@ export default function CropInspectionPage() {
   };
 
   const satelliteIncluded = satelliteEvidence?.available === true && result?.risk.signals_used.includes("satellite") === true;
+  const soilIncluded = soilEvidence?.available === true && result?.risk.signals_used.includes("soil") === true;
   const satelliteAvailable = satelliteEvidence?.available === true;
   const satelliteFreshness = result?.evaluation.evidence_trace.satellite_freshness || "unknown";
   const satelliteCurrentUse = satelliteIncluded && satelliteFreshness !== "stale";
