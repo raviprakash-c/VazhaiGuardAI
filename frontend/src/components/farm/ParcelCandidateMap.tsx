@@ -78,7 +78,20 @@ export default function ParcelCandidateMap({
       {
         style: (feature) => {
           const id = String(feature?.properties?.parcel_id || "");
-          const isSelected = selected?.properties?.parcel_id ?? selected?.properties?.parcel_no === id;
+          const selectedId = selected
+            ? String(
+                selected.properties?.parcel_id ??
+                  selected.properties?.parcel_no ??
+                  selected.properties?.KIDE ??
+                  selected.properties?.kide ??
+                  selected.properties?.survey_number ??
+                  selected.properties?.survey_no ??
+                  selected.properties?.Land_id ??
+                  selected.properties?.land_id ??
+                  "",
+              )
+            : "";
+          const isSelected = selectedId !== "" && selectedId === id;
           return {
             color: isSelected ? "#073b2a" : "#7fc97f",
             weight: isSelected ? 4 : 2,
