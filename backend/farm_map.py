@@ -482,36 +482,7 @@ def create_ai_farm_profile(
 
 @router.get("")
 def get_farms():
-
-    return {
-        "farms": read_farms()
-    }
-
-
-# ============================================================
-# GET ONE SAVED FARM
-# ============================================================
-
-@router.get("/{farm_id}")
-def get_farm_by_id(
-    farm_id: str,
-):
-
-    farms = read_farms()
-
-    for farm in farms:
-
-        if farm.get("farm_id") == farm_id:
-
-            return farm
-
-    raise HTTPException(
-        status_code=404,
-        detail=(
-            "Farm not found: "
-            + farm_id
-        ),
-    )
+    return {"farms": read_farms()}
 
 
 # ============================================================
@@ -520,36 +491,7 @@ def get_farm_by_id(
 
 @router.get("/health")
 def farm_map_health():
-
-    return {
-        "status": "ok",
-        "service": "farm-map",
-    }
-
-
-# ============================================================
-# GET ALL SAVED FARMS
-# ============================================================
-
-@router.get("")
-def get_farms():
-
-    return {
-        "farms": read_farms()
-    }
-
-
-# ============================================================
-# HEALTH CHECK
-# ============================================================
-
-@router.get("/health")
-def farm_map_health():
-
-    return {
-        "status": "ok",
-        "service": "farm-map",
-    }
+    return {"status": "ok", "service": "farm-map"}
 
 
 # ============================================================
@@ -557,22 +499,14 @@ def farm_map_health():
 # ============================================================
 
 @router.get("/{farm_id}")
-def get_farm_by_id(
-    farm_id: str,
-):
-
+def get_farm_by_id(farm_id: str):
     farms = read_farms()
 
     for farm in farms:
-
         if farm.get("farm_id") == farm_id:
-
             return farm
 
     raise HTTPException(
         status_code=404,
-        detail=(
-            "Farm not found: "
-            + farm_id
-        ),
+        detail="Farm not found: " + farm_id,
     )
