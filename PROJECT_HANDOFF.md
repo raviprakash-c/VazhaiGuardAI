@@ -4,9 +4,9 @@
 >
 > **Handoff date:** 2026-10-05
 > **Repository:** `raviprakash-c/VazhaiGuardAI`
-> **Current development branch:** `prototype-commit11-closed-loop-reinspection`
-> **Current branch HEAD:** `9882ebb612804f55a517e7ca6c507b0f12226578`
-> **Latest commit:** `feat: connect farmer actions to reinspection UI`
+> **Current development branch:** `prototype-commit13-cdse-farm-layers`
+> **Current branch HEAD:** current branch head contains the free Leaflet/OSM map hardening and satellite-layer display
+> **Latest commit:** `feat: harden free farm map and satellite display`
 
 ---
 
