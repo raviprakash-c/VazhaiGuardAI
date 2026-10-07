@@ -315,7 +315,7 @@ export default function SatelliteMap({
 
     if (!boundary) return;
 
-    const polygon = L.polygon(geometryToLeaflet(boundary), {
+    const polygon = L.polygon(geometryToLeaflet(boundary) as any, {
       color: "#146c43",
       weight: 4,
       fillColor: "#b8df4b",
@@ -439,6 +439,47 @@ export default function SatelliteMap({
   return (
     <div className="relative h-[620px] w-full overflow-hidden rounded-[24px]">
       <div ref={containerRef} className="h-full w-full" />
+
+      <div className="absolute left-4 top-4 z-[500] flex flex-wrap gap-1 rounded-2xl border border-white/70 bg-white/95 p-1 shadow-lg backdrop-blur">
+        {([
+          ["street", "Map"],
+          ["true-color", "Satellite"],
+          ["ndvi", "NDVI"],
+          ["ndre", "NDRE"],
+          ["ndwi", "NDWI"],
+          ["stress", "Stress"],
+        ] as Array<["street" | "true-color" | SatelliteLayer, string]>).map(
+          ([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setMapLayer(value)}
+              className={
+                mapLayer === value
+                  ? "rounded-xl bg-[#073b2a] px-3 py-2 text-[10px] font-bold text-white"
+                  : "rounded-xl px-3 py-2 text-[10px] font-bold text-[#53655b] hover:bg-[#eef7f0]"
+              }
+            >
+              {label}
+            </button>
+          ),
+        )}
+      </div>
+
+      {imageryLoading && (
+        <div className="absolute left-1/2 top-20 z-[500] -translate-x-1/2 rounded-full bg-[#073b2a]/95 px-4 py-2 text-xs font-bold text-white shadow-lg">
+          Loading Sentinel-2...
+        </div>
+      )}
+
+      {imageryError && (
+        <div className="absolute bottom-4 right-4 z-[500] max-w-[320px] rounded-2xl border border-[#f3c7c7] bg-white/95 px-4 py-3 text-xs text-[#7a2727] shadow-lg backdrop-blur">
+          <p className="font-bold">Satellite layer unavailable</p>
+          <p className="mt-1">{imageryError}</p>
+        </div>
+      )}
+
+
 
       <div className="pointer-events-none absolute left-4 bottom-4 z-[500] max-w-[300px] rounded-2xl border border-white/70 bg-white/95 px-4 py-3 text-xs text-[#53655b] shadow-lg backdrop-blur">
         <p className="font-bold text-[#13271d]">Map controls</p>
