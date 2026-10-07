@@ -1,218 +1,124 @@
 import { useEffect, useRef } from "react";
-import mapboxgl from "mapbox-gl";
+import L from "leaflet";
 import type { ParcelCandidate } from "../../types/farmMap";
 
-import "mapbox-gl/dist/mapbox-gl.css";
-
+import "leaflet/dist/leaflet.css";
 
 type Props = {
+  /* Kept for backwards compatibility. No Mapbox token is required. */
   accessToken?: string;
   candidates: ParcelCandidate[];
   selected: ParcelCandidate | null;
   onSelect: (candidate: ParcelCandidate) => void;
 };
 
-
 export default function ParcelCandidateMap({
-  accessToken,
   candidates,
   selected,
   onSelect,
 }: Props) {
-
-  const containerRef =
-    useRef<HTMLDivElement | null>(null);
-
-  const mapRef =
-    useRef<mapboxgl.Map | null>(null);
-
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<L.Map | null>(null);
+  const layerRef = useRef<L.GeoJSON | null>(null);
 
   useEffect(() => {
+    if (!containerRef.current || mapRef.current) return;
 
-    if (
-      !containerRef.current ||
-      !accessToken ||
-      candidates.length === 0
-    ) {
-      return;
-    }
+    const first = candidates.find((candidate) => candidate.centroid);
+    const center: L.LatLngExpression = first?.centroid
+      ? [first.centroid.latitude, first.centroid.longitude]
+      : [8.8, 78.1];
 
+    const map = L.map(containerRef.current, {
+      zoomControl: false,
+      preferCanvas: true,
+    }).setView(center, 14);
 
-    mapboxgl.accessToken =
-      accessToken;
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+      maxZoom: 21,
+    }).addTo(map);
 
-
-    const first =
-      candidates.find(
-        candidate =>
-          candidate.centroid
-      );
-
-
-    const map =
-      new mapboxgl.Map({
-        container:
-          containerRef.current,
-
-        style:
-          "mapbox://styles/mapbox/satellite-streets-v12",
-
-        center: first?.centroid
-          ? [
-              first.centroid.longitude,
-              first.centroid.latitude,
-            ]
-          : [78.1, 8.8],
-
-        zoom: 14,
-      });
-
+    L.control.zoom({ position: "topright" }).addTo(map);
+    L.control.scale({ position: "bottomright", imperial: true, metric: true }).addTo(map);
 
     mapRef.current = map;
 
-
-    map.addControl(
-      new mapboxgl.NavigationControl(),
-      "top-right"
-    );
-
-
-    map.on(
-      "load",
-      () => {
-
-        candidates.forEach(
-          (candidate, index) => {
-
-            const sourceId =
-              `parcel-${index}`;
-
-            const layerId =
-              `parcel-fill-${index}`;
-
-
-            map.addSource(
-              sourceId,
-              {
-                type: "geojson",
-
-                data: {
-                  type: "Feature",
-
-                  properties:
-                    candidate.properties,
-
-                  geometry:
-                    candidate.geometry,
-                },
-              }
-            );
-
-
-            map.addLayer({
-              id: layerId,
-
-              type: "fill",
-
-              source: sourceId,
-
-              paint: {
-                "fill-opacity":
-                  selected === candidate
-                    ? 0.55
-                    : 0.25,
-              },
-            });
-
-
-            map.addLayer({
-              id:
-                `parcel-line-${index}`,
-
-              type: "line",
-
-              source: sourceId,
-
-              paint: {
-                "line-width":
-                  selected === candidate
-                    ? 4
-                    : 2,
-              },
-            });
-
-
-            map.on(
-              "click",
-              layerId,
-              () => {
-                onSelect(candidate);
-              }
-            );
-
-
-            map.on(
-              "mouseenter",
-              layerId,
-              () => {
-                map.getCanvas().style.cursor =
-                  "pointer";
-              }
-            );
-
-
-            map.on(
-              "mouseleave",
-              layerId,
-              () => {
-                map.getCanvas().style.cursor =
-                  "";
-              }
-            );
-
-          }
-        );
-      }
-    );
-
-
     return () => {
-
       map.remove();
-
-      mapRef.current =
-        null;
-
+      mapRef.current = null;
+      layerRef.current = null;
     };
+  }, []);
 
-  }, [
-    accessToken,
-    candidates,
-    onSelect,
-    selected,
-  ]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
 
+    if (layerRef.current) {
+      map.removeLayer(layerRef.current);
+      layerRef.current = null;
+    }
 
-  if (!accessToken) {
+    if (!candidates.length) return;
 
-    return (
-      <div className="flex h-[500px] items-center justify-center bg-slate-100 p-6 text-center">
-        <div>
-          <p className="font-semibold">
-            Mapbox token missing
-          </p>
+    const layer = L.geoJSON(
+      {
+        type: "FeatureCollection",
+        features: candidates
+          .filter((candidate) => Boolean(candidate.geometry))
+          .map((candidate) => ({
+            type: "Feature",
+            properties: {
+              parcel_id: candidate.parcel_id,
+            },
+            geometry: candidate.geometry,
+          })),
+      } as GeoJSON.FeatureCollection,
+      {
+        style: (feature) => {
+          const id = String(feature?.properties?.parcel_id || "");
+          const isSelected = selected?.parcel_id === id;
+          return {
+            color: isSelected ? "#073b2a" : "#7fc97f",
+            weight: isSelected ? 4 : 2,
+            fillColor: isSelected ? "#b8df4b" : "#7fc97f",
+            fillOpacity: isSelected ? 0.45 : 0.2,
+          };
+        },
+        onEachFeature: (feature, featureLayer) => {
+          const parcel = candidates.find(
+            (candidate) =>
+              String(candidate.parcel_id) ===
+              String(feature.properties?.parcel_id || ""),
+          );
+          if (!parcel) return;
 
-          <p className="mt-2 text-sm text-slate-600">
-            Add VITE_MAPBOX_TOKEN to the frontend .env file.
-          </p>
-        </div>
-      </div>
-    );
-  }
+          featureLayer.bindTooltip(
+            String(parcel.parcel_id || "Reference parcel"),
+            { sticky: true },
+          );
 
+          featureLayer.on("click", (event: L.LeafletMouseEvent) => {
+            L.DomEvent.stopPropagation(event);
+            onSelect(parcel);
+          });
+        },
+      },
+    ).addTo(map);
+
+    layerRef.current = layer;
+
+    const bounds = layer.getBounds();
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, {
+        padding: [40, 40],
+        maxZoom: 17,
+      });
+    }
+  }, [candidates, selected, onSelect]);
 
   if (!candidates.length) {
-
     return (
       <div className="flex h-[500px] items-center justify-center bg-slate-100">
         <p className="text-sm text-slate-600">
@@ -222,11 +128,5 @@ export default function ParcelCandidateMap({
     );
   }
 
-
-  return (
-    <div
-      ref={containerRef}
-      className="h-[500px] w-full"
-    />
-  );
+  return <div ref={containerRef} className="h-[500px] w-full" />;
 }
