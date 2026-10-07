@@ -6,9 +6,10 @@ from services.evidence_state import build_evidence_state
 
 
 BASE_WEIGHTS = {
-    "vision": 0.50,
-    "weather": 0.30,
+    "vision": 0.45,
+    "weather": 0.25,
     "satellite": 0.20,
+    "soil": 0.10,
 }
 
 
@@ -71,6 +72,12 @@ def satellite_risk(satellite: dict[str, Any] | None) -> float:
     return 0.0
 
 
+def soil_risk(soil: dict[str, Any] | None) -> float:
+    if not soil or not soil.get("available") or soil.get("risk_score") is None:
+        return 0.0
+    return _clamp(_number(soil.get("risk_score")))
+
+
 def _label(score: float) -> str:
     if score >= 70:
         return "high"
@@ -84,6 +91,7 @@ def calculate_unified_risk(
     vision: dict[str, Any] | None,
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
+    soil: dict[str, Any] | None = None,
     farm_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Fuse current evidence while deterministically discounting stale satellite data."""
@@ -91,6 +99,7 @@ def calculate_unified_risk(
         vision=vision,
         weather=weather,
         satellite=satellite,
+        soil=soil,
         farm_context=farm_context,
     )
 
@@ -98,17 +107,20 @@ def calculate_unified_risk(
         "vision": round(vision_risk(vision), 1),
         "weather": round(weather_risk(weather), 1),
         "satellite": round(satellite_risk(satellite), 1),
+        "soil": round(soil_risk(soil), 1),
     }
 
     configured = dict(BASE_WEIGHTS)
     adjusted = dict(configured)
     satellite_factor = float(evidence_state["satellite_reliability"])
     adjusted["satellite"] *= satellite_factor
+    adjusted["soil"] *= float(evidence_state["soil_reliability"])
 
     sources = {
         "vision": bool(vision),
         "weather": bool(weather),
         "satellite": bool(satellite),
+        "soil": bool(soil and soil.get("available")),
     }
 
     # Stale satellite imagery is retained for transparency/context, but it must

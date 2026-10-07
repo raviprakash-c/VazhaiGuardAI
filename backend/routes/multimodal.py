@@ -19,6 +19,7 @@ from services.unified_risk_engine import calculate_unified_risk
 from services.decision_evaluator import evaluate_multimodal_decision
 from services.incident_engine import build_incident_and_action_plan
 from services.inspection_storage import create_inspection_record, save_inspection_record, store_photo
+from services.soil_service import get_soil_evidence
 
 router = APIRouter(prefix="/ai/multimodal", tags=["multimodal-ai"])
 TEXT_MODEL_ID = os.getenv("VAZHAIGUARD_TEXT_MODEL", "mistral.ministral-3-8b-instruct")
@@ -31,6 +32,7 @@ class CropInspectionRequest(BaseModel):
     farm_context: dict[str, Any] | None = None
     weather_context: dict[str, Any] | None = None
     satellite_context: dict[str, Any] | None = None
+    soil_context: dict[str, Any] | None = None
     zone_id: str | None = Field(default=None, max_length=80)
 
 
@@ -38,6 +40,7 @@ class RiskFusionRequest(BaseModel):
     vision: dict[str, Any]
     weather: dict[str, Any] | None = None
     satellite: dict[str, Any] | None = None
+    soil: dict[str, Any] | None = None
     farm_context: dict[str, Any] | None = None
     zone_id: str | None = Field(default=None, max_length=80)
     language: str = Field(default="ta-IN", min_length=2, max_length=16)
@@ -51,6 +54,7 @@ def _fuse_signals(
     vision: dict[str, Any],
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
+    soil: dict[str, Any] | None = None,
     farm_context: dict[str, Any] | None = None,
 ) -> tuple[float, str, dict[str, float], list[str], dict[str, float]]:
     """Compatibility wrapper around the deterministic unified risk engine.
@@ -62,6 +66,7 @@ def _fuse_signals(
         vision=vision,
         weather=weather,
         satellite=satellite,
+        soil=soil,
         farm_context=farm_context,
     )
     return (
@@ -78,6 +83,7 @@ def _build_action_prompt(
     vision: dict[str, Any],
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
+    soil: dict[str, Any] | None,
     farm_context: dict[str, Any] | None,
     score: float,
     label: str,
@@ -87,7 +93,7 @@ def _build_action_prompt(
     response_language = "simple spoken Tamil" if tamil else "simple English"
     return f"""
 You are the final farmer decision agent of VazhaiGuard AI for a banana farm in Tamil Nadu.
-Combine the supplied visual, weather, satellite (if available), and farm-context evidence.
+Combine the supplied visual, weather, satellite, soil (if available), and farm-context evidence.
 The deterministic unified risk engine calculated {score:.0f}/100 ({label}).
 
 Respond in {response_language}.
@@ -100,6 +106,13 @@ WEATHER EVIDENCE:
 
 SATELLITE EVIDENCE:
 {satellite or {}}
+
+SOIL EVIDENCE:
+{soil or {}}
+
+SOIL POLICY:
+- SoilGrids is coarse contextual evidence, not a farm-lab measurement.
+- Never prescribe fertilizer or treatment from soil evidence alone.
 
 EVIDENCE FRESHNESS/POLICY:
 - Sentinel-2 is periodic farm/zone evidence, not a live plant sensor.
@@ -151,6 +164,7 @@ def _generate_farmer_decision(
             vision=vision,
             weather=weather,
             satellite=satellite,
+            soil=soil,
             farm_context=farm_context,
             score=score,
             label=label,
@@ -287,6 +301,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         vision,
         request.weather_context,
         request.satellite_context,
+        request.soil_context,
         request.farm_context,
     )
     try:
@@ -294,6 +309,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
             vision=vision,
             weather=request.weather_context,
             satellite=request.satellite_context,
+            soil=request.soil_context,
             farm_context=request.farm_context,
             score=score,
             label=label,
@@ -318,6 +334,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         vision=vision,
         weather=request.weather_context,
         satellite=request.satellite_context,
+        soil=request.soil_context,
         risk=risk,
         decision=decision,
     )

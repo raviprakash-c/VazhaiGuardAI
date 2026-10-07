@@ -5,9 +5,10 @@ from typing import Any
 
 
 BASE_WEIGHTS = {
-    "vision": 0.50,
-    "weather": 0.30,
+    "vision": 0.45,
+    "weather": 0.25,
     "satellite": 0.20,
+    "soil": 0.10,
 }
 
 
@@ -71,6 +72,12 @@ def _freshness(age_hours: float | None, source: str) -> str:
 
 
 
+def soil_reliability(soil: dict[str, Any] | None) -> float:
+    if not soil or not soil.get("available"):
+        return 0.0
+    return min(0.40, max(0.10, float(soil.get("confidence", 0.35) or 0.35)))
+
+
 def satellite_reliability(satellite: dict[str, Any] | None) -> float:
     """Return a conservative reliability factor for satellite evidence.
 
@@ -101,6 +108,7 @@ def build_evidence_state(
     vision: dict[str, Any] | None,
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
+    soil: dict[str, Any] | None = None,
     farm_context: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Describe evidence availability, freshness and conflicts.
@@ -110,11 +118,7 @@ def build_evidence_state(
     """
     now = datetime.now(timezone.utc)
 
-    sources = {
-        "vision": vision,
-        "weather": weather,
-        "satellite": satellite,
-    }
+    sources = {"vision": vision, "weather": weather, "satellite": satellite, "soil": soil}
 
     freshness: dict[str, dict[str, Any]] = {}
     for name, evidence in sources.items():
@@ -147,8 +151,10 @@ def build_evidence_state(
         })
 
     satellite_factor = satellite_reliability(satellite)
+    soil_factor = soil_reliability(soil)
     effective_weights = dict(BASE_WEIGHTS)
     effective_weights["satellite"] *= satellite_factor
+    effective_weights["soil"] *= soil_factor
 
     available_weight = sum(
         weight
@@ -167,8 +173,10 @@ def build_evidence_state(
         "freshness": freshness,
         "base_weights": BASE_WEIGHTS,
         "satellite_reliability": round(satellite_factor, 3),
+        "soil_reliability": round(soil_factor, 3),
         "effective_weights": normalized_weights,
         "conflicts": conflicts,
         "satellite_is_live": False,
-        "ground_truth_policy": "Current farmer-confirmed records and recent photos take precedence over stale satellite observations.",
+        "soil_is_live_sensor": False,
+        "ground_truth_policy": "Current farmer-confirmed records and recent photos take precedence over coarse or stale environmental context.",
     }

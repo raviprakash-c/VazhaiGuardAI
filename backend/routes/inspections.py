@@ -27,6 +27,7 @@ class ReinspectionRequest(BaseModel):
     language: str = Field(default="ta-IN", min_length=2, max_length=16)
     weather_context: dict[str, Any] | None = None
     satellite_context: dict[str, Any] | None = None
+    soil_context: dict[str, Any] | None = None
     zone_id: str | None = Field(default=None, max_length=80)
 
 
@@ -73,10 +74,10 @@ def reinspect(request: ReinspectionRequest) -> dict[str, Any]:
         raise HTTPException(status_code=503, detail="Reinspection vision analysis is temporarily unavailable.") from exc
 
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
-        vision, request.weather_context, request.satellite_context, farm_context
+        vision, request.weather_context, request.satellite_context, request.soil_context, farm_context
     )
     risk_result = calculate_unified_risk(
-        vision=vision, weather=request.weather_context, satellite=request.satellite_context, farm_context=farm_context
+        vision=vision, weather=request.weather_context, satellite=request.satellite_context, soil=request.soil_context, farm_context=farm_context
     )
     risk = {
         "score": score,
@@ -86,7 +87,7 @@ def reinspect(request: ReinspectionRequest) -> dict[str, Any]:
         "evidence_state": risk_result.get("evidence_state", {}),
     }
     decision = _generate_farmer_decision(
-        vision=vision, weather=request.weather_context, satellite=request.satellite_context,
+        vision=vision, weather=request.weather_context, satellite=request.satellite_context, soil=request.soil_context,
         farm_context=farm_context, score=score, label=label, language=request.language,
     )
     evaluation = evaluate_multimodal_decision(
