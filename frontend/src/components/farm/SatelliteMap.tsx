@@ -80,14 +80,33 @@ function distanceInMeters(
   return earthRadius * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function calculatePerimeter(coordinates: [number, number][][]): number {
-  const ring = coordinates[0];
+function ringPerimeter(ring: [number, number][]): number {
   if (!ring || ring.length < 2) return 0;
   let perimeter = 0;
   for (let index = 1; index < ring.length; index += 1) {
     perimeter += distanceInMeters(ring[index - 1], ring[index]);
   }
   return perimeter;
+}
+
+function calculatePerimeter(boundary: FarmPolygonGeometry): number {
+  if (boundary.type === "Polygon") {
+    return boundary.coordinates.reduce(
+      (sum: number, ring: [number, number][]) => sum + ringPerimeter(ring),
+      0,
+    );
+  }
+
+  return boundary.coordinates.reduce(
+    (sum: number, polygon: [number, number][][]) =>
+      sum +
+      polygon.reduce(
+        (polygonSum: number, ring: [number, number][]) =>
+          polygonSum + ringPerimeter(ring),
+        0,
+      ),
+    0,
+  );
 }
 
 function calculateBoundaryMetrics(
@@ -99,8 +118,8 @@ function calculateBoundaryMetrics(
     geometry: boundary,
   };
   return {
-    areaAcres: Number((area(polygon) / 4046.8564224).toFixed(4)),
-    perimeterM: Number(calculatePerimeter(boundary.coordinates).toFixed(2)),
+    areaAcres: Number((area(polygon as never) / 4046.8564224).toFixed(4)),
+    perimeterM: Number(calculatePerimeter(boundary).toFixed(2)),
   };
 }
 
@@ -538,7 +557,7 @@ export default function SatelliteMap({
     <div className="relative h-[620px] w-full overflow-hidden rounded-[24px]">
       <div ref={containerRef} className="h-full w-full" />
 
-      <div className="absolute left-4 top-4 z-[500] flex flex-wrap gap-1 rounded-2xl border border-white/70 bg-white/95 p-1 shadow-lg backdrop-blur">
+      <div className="absolute left-4 top-16 z-[500] flex flex-wrap gap-1 rounded-2xl border border-white/70 bg-white/95 p-1 shadow-lg backdrop-blur">
         {([
           ["street", "Map"],
           ["true-color", "Satellite"],
