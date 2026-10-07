@@ -78,7 +78,6 @@ export default function CropInspectionPage() {
   const [weatherLoaded, setWeatherLoaded] = useState(false);
   const [weatherData, setWeatherData] = useState<WeatherContext | null>(null);
   const [satelliteEvidence, setSatelliteEvidence] = useState<SatelliteEvidence | null>(null);
-  const [soilEvidence, setSoilEvidence] = useState<SoilEvidence | null>(null);
   const [farmLocationSource, setFarmLocationSource] = useState<"saved-farm" | "device" | "unavailable">("unavailable");
   const { speak, isSpeaking } = useVoiceAssistant();
 
@@ -94,7 +93,6 @@ export default function CropInspectionPage() {
       setWeatherLoaded(false);
       setWeatherData(null);
       setSatelliteEvidence(null);
-      setSoilEvidence(null);
       const dataUrl = await readFileAsDataUrl(file);
       setImageDataUrl(dataUrl);
       setPreview(dataUrl);
@@ -146,7 +144,6 @@ export default function CropInspectionPage() {
       } else {
         soil = { available: false, reason: "Farm location is unavailable." };
       }
-      setSoilEvidence(soil);
       try {
         localStorage.setItem("vazhaiguard_last_satellite_evidence", JSON.stringify(satellite));
         localStorage.setItem("vazhaiguard_last_satellite_evidence_at", new Date().toISOString());
