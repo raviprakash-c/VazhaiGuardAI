@@ -85,8 +85,8 @@ type FarmLocationData = {
  * to the backend.
  */
 type PolygonGeometry = {
-  type: "Polygon";
-  coordinates: [number, number][][];
+  type: "Polygon" | "MultiPolygon";
+  coordinates: any;
 };
 
 type Coordinate = [
@@ -1583,12 +1583,9 @@ export default function FarmLocationPage() {
    * actual MultiPolygon visualization.
    */
 
-  const mapBoundary:
-    | PolygonGeometry
-    | null =
-    locationData.boundary?.type ===
-    "Polygon"
-      ? locationData.boundary
+  const mapBoundary: PolygonGeometry | null =
+    locationData.boundary
+      ? (locationData.boundary as PolygonGeometry)
       : null;
 
   /* =========================================================
