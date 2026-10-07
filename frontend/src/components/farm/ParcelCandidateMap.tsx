@@ -70,7 +70,7 @@ export default function ParcelCandidateMap({
           .map((candidate) => ({
             type: "Feature",
             properties: {
-              parcel_id: candidate.parcel_id,
+              parcel_id: candidate.properties?.parcel_id ?? candidate.properties?.["parcel_no"] ?? "",
             },
             geometry: candidate.geometry,
           })),
@@ -78,7 +78,7 @@ export default function ParcelCandidateMap({
       {
         style: (feature) => {
           const id = String(feature?.properties?.parcel_id || "");
-          const isSelected = selected?.parcel_id === id;
+          const isSelected = String(selected?.properties?.parcel_id ?? selected?.properties?.["parcel_no"] ?? "") === id;
           return {
             color: isSelected ? "#073b2a" : "#7fc97f",
             weight: isSelected ? 4 : 2,
@@ -89,13 +89,13 @@ export default function ParcelCandidateMap({
         onEachFeature: (feature, featureLayer) => {
           const parcel = candidates.find(
             (candidate) =>
-              String(candidate.parcel_id) ===
+              String(candidate.properties?.parcel_id ?? candidate.properties?.["parcel_no"] ?? "") ===
               String(feature.properties?.parcel_id || ""),
           );
           if (!parcel) return;
 
           featureLayer.bindTooltip(
-            String(parcel.parcel_id || "Reference parcel"),
+            String(parcel.properties?.parcel_id ?? parcel.properties?.["parcel_no"] ?? "Reference parcel"),
             { sticky: true },
           );
 
