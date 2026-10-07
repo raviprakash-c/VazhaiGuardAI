@@ -290,10 +290,6 @@ export default function SatelliteMap({
     map.on("click", handleMapClick);
     map.on("dblclick", handleDoubleClick);
 
-    // Store the function on the map instance so signal effects can invoke it.
-    (map as L.Map & { __finishDrawing?: () => void }).__finishDrawing =
-      finishDrawing;
-
     mapRef.current = map;
 
     return () => {
