@@ -2436,5 +2436,501 @@
       "confidence": 0.85,
       "source_file": "Park_Cadastral_Map.geojson"
     }
+  },
+  {
+    "farm_id": "farm_044bc7b1d7",
+    "farm_profile": {
+      "farm_name": "Murugan Thottam",
+      "total_farm_acres": 5,
+      "banana_area_acres": 3,
+      "banana_variety": "Grand Naine",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.781394920455273,
+      "longitude": 78.02714940905571,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.02714819088578,
+            8.7822788187095
+          ],
+          [
+            78.02711516618729,
+            8.782189686831202
+          ],
+          [
+            78.02702011540532,
+            8.781932562779659
+          ],
+          [
+            78.02731046453118,
+            8.78163998455058
+          ],
+          [
+            78.02777817472816,
+            8.781155225323303
+          ],
+          [
+            78.02799224853516,
+            8.78091731864916
+          ],
+          [
+            78.02799224853516,
+            8.78084574780928
+          ],
+          [
+            78.02791563794017,
+            8.780697304541746
+          ],
+          [
+            78.02768915891647,
+            8.780243028012464
+          ],
+          [
+            78.02646456286311,
+            8.780243028012464
+          ],
+          [
+            78.02668115124106,
+            8.780990711880378
+          ],
+          [
+            78.02635878324509,
+            8.781548864443423
+          ],
+          [
+            78.0264027044177,
+            8.781683887866947
+          ],
+          [
+            78.02622433751822,
+            8.7822788187095
+          ],
+          [
+            78.02714819088578,
+            8.7822788187095
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 6.6682,
+    "perimeter_m": 758.05,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.85,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
+  },
+  {
+    "farm_id": "farm_44c2d8b16e",
+    "farm_profile": {
+      "farm_name": "Murugan Thottam",
+      "total_farm_acres": 5,
+      "banana_area_acres": 3,
+      "banana_variety": "Grand Naine",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.781394920455273,
+      "longitude": 78.02714940905571,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.02714819088578,
+            8.7822788187095
+          ],
+          [
+            78.02711516618729,
+            8.782189686831202
+          ],
+          [
+            78.02702011540532,
+            8.781932562779659
+          ],
+          [
+            78.02731046453118,
+            8.78163998455058
+          ],
+          [
+            78.02777817472816,
+            8.781155225323303
+          ],
+          [
+            78.02799224853516,
+            8.78091731864916
+          ],
+          [
+            78.02799224853516,
+            8.78084574780928
+          ],
+          [
+            78.02791563794017,
+            8.780697304541746
+          ],
+          [
+            78.02768915891647,
+            8.780243028012464
+          ],
+          [
+            78.02646456286311,
+            8.780243028012464
+          ],
+          [
+            78.02668115124106,
+            8.780990711880378
+          ],
+          [
+            78.02635878324509,
+            8.781548864443423
+          ],
+          [
+            78.0264027044177,
+            8.781683887866947
+          ],
+          [
+            78.02622433751822,
+            8.7822788187095
+          ],
+          [
+            78.02714819088578,
+            8.7822788187095
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 6.6682,
+    "perimeter_m": 758.05,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.85,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
+  },
+  {
+    "farm_id": "farm_1ba73ff73e",
+    "farm_profile": {
+      "farm_name": "ganeshan thottam",
+      "total_farm_acres": 5,
+      "banana_area_acres": 3,
+      "banana_variety": "Grand Naine",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.781394920455273,
+      "longitude": 78.02714940905571,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.02714819088578,
+            8.7822788187095
+          ],
+          [
+            78.02711516618729,
+            8.782189686831202
+          ],
+          [
+            78.02702011540532,
+            8.781932562779659
+          ],
+          [
+            78.02731046453118,
+            8.78163998455058
+          ],
+          [
+            78.02777817472816,
+            8.781155225323303
+          ],
+          [
+            78.02799224853516,
+            8.78091731864916
+          ],
+          [
+            78.02799224853516,
+            8.78084574780928
+          ],
+          [
+            78.02791563794017,
+            8.780697304541746
+          ],
+          [
+            78.02768915891647,
+            8.780243028012464
+          ],
+          [
+            78.02646456286311,
+            8.780243028012464
+          ],
+          [
+            78.02668115124106,
+            8.780990711880378
+          ],
+          [
+            78.02635878324509,
+            8.781548864443423
+          ],
+          [
+            78.0264027044177,
+            8.781683887866947
+          ],
+          [
+            78.02622433751822,
+            8.7822788187095
+          ],
+          [
+            78.02714819088578,
+            8.7822788187095
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 6.6682,
+    "perimeter_m": 758.05,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.85,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
+  },
+  {
+    "farm_id": "farm_178189499b",
+    "farm_profile": {
+      "farm_name": "வல்லி தோட்டம்",
+      "total_farm_acres": 6,
+      "banana_area_acres": 5,
+      "banana_variety": "Poovan",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.781394920455273,
+      "longitude": 78.02714940905571,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.02714819088578,
+            8.7822788187095
+          ],
+          [
+            78.02711516618729,
+            8.782189686831202
+          ],
+          [
+            78.02702011540532,
+            8.781932562779659
+          ],
+          [
+            78.02731046453118,
+            8.78163998455058
+          ],
+          [
+            78.02777817472816,
+            8.781155225323303
+          ],
+          [
+            78.02799224853516,
+            8.78091731864916
+          ],
+          [
+            78.02799224853516,
+            8.78084574780928
+          ],
+          [
+            78.02791563794017,
+            8.780697304541746
+          ],
+          [
+            78.02768915891647,
+            8.780243028012464
+          ],
+          [
+            78.02646456286311,
+            8.780243028012464
+          ],
+          [
+            78.02668115124106,
+            8.780990711880378
+          ],
+          [
+            78.02635878324509,
+            8.781548864443423
+          ],
+          [
+            78.0264027044177,
+            8.781683887866947
+          ],
+          [
+            78.02622433751822,
+            8.7822788187095
+          ],
+          [
+            78.02714819088578,
+            8.7822788187095
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 6.6682,
+    "perimeter_m": 758.05,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.85,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
+  },
+  {
+    "farm_id": "farm_17ff0cb95f",
+    "farm_profile": {
+      "farm_name": "ragul thottam",
+      "total_farm_acres": 5,
+      "banana_area_acres": 4,
+      "banana_variety": "Grand Naine",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.780965213742522,
+      "longitude": 78.02719235420227,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "Polygon",
+      "coordinates": [
+        [
+          [
+            78.0279976129532,
+            8.781541906179786
+          ],
+          [
+            78.02515983581544,
+            8.783127061535271
+          ],
+          [
+            78.02550315856935,
+            8.780582327237907
+          ],
+          [
+            78.02597522735597,
+            8.778461701987561
+          ],
+          [
+            78.02760601043703,
+            8.778504114611353
+          ],
+          [
+            78.02816390991211,
+            8.781642635317011
+          ],
+          [
+            78.02816390991211,
+            8.781642635317011
+          ],
+          [
+            78.02816390991211,
+            8.781642635317011
+          ],
+          [
+            78.0279976129532,
+            8.781541906179786
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 26.9083,
+    "perimeter_m": 1440.16,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.95,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
   }
 ]
