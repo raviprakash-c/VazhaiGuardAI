@@ -49,13 +49,6 @@ import {
 } from "../services/parcelApi";
 
 /* =========================================================
-   CONFIG
-   ========================================================= */
-
-const MAPBOX_TOKEN =
-  import.meta.env.VITE_MAPBOX_TOKEN;
-
-/* =========================================================
    TYPES
    ========================================================= */
 
@@ -2219,10 +2212,6 @@ export default function FarmLocationPage() {
               <div className="relative overflow-hidden rounded-[24px]">
 
                 <SatelliteMap
-                  accessToken={
-                    MAPBOX_TOKEN
-                  }
-
                   location={{
                     latitude:
                       locationData.latitude,
