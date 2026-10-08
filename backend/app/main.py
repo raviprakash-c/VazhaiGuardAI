@@ -12,6 +12,7 @@ from routes.multimodal import router as multimodal_router
 from routes.evidence import router as evidence_router
 from routes.followup import router as followup_router
 from routes.satellite import router as satellite_router
+from routes.soil import router as soil_router
 from voice_registration import router as voice_registration_router
 from agents.orchestrator import router as orchestrator_router
 from weather import router as weather_router
@@ -49,6 +50,7 @@ app.include_router(bedrock_router)
 app.include_router(multimodal_router)
 app.include_router(evidence_router)
 app.include_router(satellite_router)
+app.include_router(soil_router)
 
 @app.get("/")
 def root():
