@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import area from "@turf/area";
 import {
@@ -297,7 +297,7 @@ export default function SatelliteMap({
       );
 
       const ring = newBoundary.coordinates[0].map(
-        ([lng, lat]) => [lat, lng] as L.LatLngExpression,
+        ([lng, lat]: [number, number]) => [lat, lng] as L.LatLngExpression,
       );
       map.fitBounds(L.latLngBounds(ring), {
         padding: [70, 70],

@@ -6,23 +6,12 @@ import {
   RotateCcw,
   Search,
 } from "lucide-react";
-
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
-
-import SatelliteMap from "./SatelliteMap";
-
-type FarmMapLocation = {
-  latitude: number;
-  longitude: number;
-  label?: string;
-};
-
-type FarmPolygonGeometry = {
-  type: "Polygon";
-  coordinates: [number, number][][];
-};
-
+import SatelliteMap, {
+  type FarmMapLocation,
+  type FarmPolygonGeometry,
+} from "./SatelliteMap";
 type Props = {
   accessToken: string;
   location: FarmMapLocation;
@@ -35,22 +24,15 @@ type Props = {
   startDrawSignal: number;
   clearDrawSignal: number;
   dropPinMode: boolean;
-  onSearchTextChange: (
-    value: string
-  ) => void;
+  onSearchTextChange: (value: string) => void;
   onSearch: () => void;
   onUseCurrentLocation: () => void;
   onToggleDropPin: () => void;
   onStartDraw: () => void;
   onClearBoundary: () => void;
-  onLocationChange: (
-    location: FarmMapLocation
-  ) => void;
-  onBoundaryChange: (
-    boundary: FarmPolygonGeometry | null
-  ) => void;
+  onLocationChange: (location: FarmMapLocation) => void;
+  onBoundaryChange: (boundary: FarmPolygonGeometry | null) => void;
 };
-
 export default function FarmBoundaryEditor({
   accessToken,
   location,
