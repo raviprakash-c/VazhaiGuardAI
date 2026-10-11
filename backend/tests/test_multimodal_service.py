@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 # from developer-specific AWS profiles and credentials.
 with patch("boto3.Session") as _session_factory:
     _session_factory.return_value.resource.return_value.Table.return_value = MagicMock()
-    from services.multimodal_service import _analyze_with_local_ollama
+    from services.multimodal_service import _analyze_with_local_ollama, _validate_vision_result
 
 
 class LocalVisionTests(unittest.TestCase):
@@ -39,6 +39,49 @@ class LocalVisionTests(unittest.TestCase):
         self.assertEqual(result["model"], "qwen2.5vl:3b")
         self.assertFalse(result["fallback_used"])
         self.assertTrue(result["crop_visible"])
+
+
+    def _valid_result(self):
+        return {
+            "observation": "Visible banana leaf",
+            "crop_visible": True,
+            "stress_signals": ["leaf yellowing"],
+            "possible_causes": ["water stress"],
+            "urgency": "MEDIUM",
+            "visual_confidence": 0.7,
+            "needs_field_verification": True,
+            "recommended_checks": ["Check soil moisture"],
+            "farmer_message": "Check the soil near the plant.",
+        }
+
+    def test_vision_result_normalizes_urgency_and_confidence(self):
+        result = _validate_vision_result(self._valid_result())
+        self.assertEqual(result["urgency"], "medium")
+        self.assertEqual(result["visual_confidence"], 0.7)
+
+    def test_vision_result_rejects_missing_required_fields(self):
+        result = self._valid_result()
+        del result["farmer_message"]
+        with self.assertRaisesRegex(RuntimeError, "missing required fields"):
+            _validate_vision_result(result)
+
+    def test_vision_result_rejects_out_of_range_confidence(self):
+        result = self._valid_result()
+        result["visual_confidence"] = 1.4
+        with self.assertRaisesRegex(RuntimeError, "between 0 and 1"):
+            _validate_vision_result(result)
+
+    def test_vision_result_rejects_invalid_urgency(self):
+        result = self._valid_result()
+        result["urgency"] = "critical"
+        with self.assertRaisesRegex(RuntimeError, "low, medium, or high"):
+            _validate_vision_result(result)
+
+    def test_vision_result_rejects_non_boolean_crop_flag(self):
+        result = self._valid_result()
+        result["crop_visible"] = "yes"
+        with self.assertRaisesRegex(RuntimeError, "must be a boolean"):
+            _validate_vision_result(result)
 
 
 if __name__ == "__main__":

@@ -88,6 +88,58 @@ Rules:
 """
 
 
+
+_REQUIRED_VISION_FIELDS = (
+    "observation",
+    "crop_visible",
+    "stress_signals",
+    "possible_causes",
+    "urgency",
+    "visual_confidence",
+    "needs_field_verification",
+    "recommended_checks",
+    "farmer_message",
+)
+
+
+def _validate_vision_result(value: Any) -> dict[str, Any]:
+    """Reject incomplete or unsafe-to-consume model output before fusion."""
+    if not isinstance(value, dict):
+        raise RuntimeError("Vision model output must be a JSON object.")
+
+    missing = [field for field in _REQUIRED_VISION_FIELDS if field not in value]
+    if missing:
+        raise RuntimeError("Vision model output is missing required fields: " + ", ".join(missing))
+
+    for field in ("observation", "farmer_message"):
+        if not isinstance(value[field], str) or not value[field].strip():
+            raise RuntimeError(f"Vision model field '{field}' must be a non-empty string.")
+
+    if not isinstance(value["crop_visible"], bool):
+        raise RuntimeError("Vision model field 'crop_visible' must be a boolean.")
+    if not isinstance(value["needs_field_verification"], bool):
+        raise RuntimeError("Vision model field 'needs_field_verification' must be a boolean.")
+
+    for field in ("stress_signals", "possible_causes", "recommended_checks"):
+        items = value[field]
+        if not isinstance(items, list) or any(not isinstance(item, str) or not item.strip() for item in items):
+            raise RuntimeError(f"Vision model field '{field}' must be a list of non-empty strings.")
+
+    urgency = value["urgency"]
+    if not isinstance(urgency, str) or urgency.strip().lower() not in {"low", "medium", "high"}:
+        raise RuntimeError("Vision model field 'urgency' must be low, medium, or high.")
+    value["urgency"] = urgency.strip().lower()
+
+    confidence = value["visual_confidence"]
+    if isinstance(confidence, bool) or not isinstance(confidence, (int, float)):
+        raise RuntimeError("Vision model field 'visual_confidence' must be a number between 0 and 1.")
+    if not 0.0 <= float(confidence) <= 1.0:
+        raise RuntimeError("Vision model field 'visual_confidence' must be a number between 0 and 1.")
+    value["visual_confidence"] = float(confidence)
+
+    return value
+
+
 def _analyze_with_local_ollama(
     *,
     image_bytes: bytes,
@@ -122,7 +174,7 @@ def _analyze_with_local_ollama(
     content = body.get("message", {}).get("content", "")
     if not isinstance(content, str) or not content.strip():
         raise RuntimeError("Local vision model returned no text output.")
-    result = extract_json(content)
+    result = _validate_vision_result(extract_json(content))
     result["model"] = LOCAL_VISION_MODEL
     result["provider"] = "ollama-local"
     result["fallback_used"] = False
@@ -194,7 +246,7 @@ def analyze_crop_image(
             if not text:
                 raise RuntimeError("Vision model returned no text output.")
 
-            result = extract_json(text)
+            result = _validate_vision_result(extract_json(text))
             result["model"] = model_id
             result["provider"] = "aws-bedrock"
             result["fallback_used"] = local_attempted
