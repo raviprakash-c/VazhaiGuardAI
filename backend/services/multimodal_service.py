@@ -4,7 +4,6 @@ import base64
 import json
 import os
 import logging
-import base64
 import urllib.error
 import urllib.request
 from typing import Any
@@ -152,6 +151,7 @@ def analyze_crop_image(
     prompt = _inspection_prompt(language, farm_context, weather_context)
 
     last_error: Exception | None = None
+    local_attempted = LOCAL_VISION_ENABLED
     if LOCAL_VISION_ENABLED:
         try:
             return _analyze_with_local_ollama(image_bytes=image_bytes, prompt=prompt)
@@ -197,7 +197,7 @@ def analyze_crop_image(
             result = extract_json(text)
             result["model"] = model_id
             result["provider"] = "aws-bedrock"
-            result["fallback_used"] = True
+            result["fallback_used"] = local_attempted
             return result
         except Exception as exc:
             last_error = exc
