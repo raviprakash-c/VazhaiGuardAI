@@ -12,6 +12,7 @@ export interface CropInspectionResult {
     farmer_message: string;
     model: string;
     fallback_used: boolean;
+    provider?: "ollama-local" | "aws-bedrock" | string;
   };
   latency_ms: number;
   source: string;
@@ -146,6 +147,21 @@ export interface InspectAndDecideResult extends CropInspectionResult {
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
+async function apiErrorMessage(response: Response, fallback: string): Promise<string> {
+  const body = await response.text();
+  if (body) {
+    try {
+      const parsed = JSON.parse(body) as { detail?: unknown; message?: unknown };
+      if (typeof parsed.detail === "string") return parsed.detail;
+      if (typeof parsed.message === "string") return parsed.message;
+    } catch {
+      return body;
+    }
+    return body;
+  }
+  return `${fallback} (${response.status})`;
+}
+
 export async function inspectCropImage(input: {
   imageDataUrl: string; language?: string; zoneId?: string;
   farmContext?: Record<string, unknown>; weatherContext?: Record<string, unknown>; satelliteContext?: Record<string, unknown>; soilContext?: Record<string, unknown>;
@@ -154,7 +170,7 @@ export async function inspectCropImage(input: {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, farm_context: input.farmContext || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null, soil_context: input.soilContext || null }),
   });
-  if (!response.ok) throw new Error((await response.text()) || `Inspection failed (${response.status})`);
+  if (!response.ok) throw new Error(await apiErrorMessage(response, "Inspection failed"));
   return response.json();
 }
 
@@ -166,7 +182,7 @@ export async function inspectAndDecide(input: {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ farm_id: input.farmId || null, image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, farm_context: input.farmContext || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null, soil_context: input.soilContext || null }),
   });
-  if (!response.ok) throw new Error((await response.text()) || `Multimodal decision failed (${response.status})`);
+  if (!response.ok) throw new Error(await apiErrorMessage(response, "Multimodal decision failed"));
   return response.json();
 }
 
@@ -178,7 +194,7 @@ export async function fuseRisk(input: {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ vision: input.vision, weather: input.weather || null, satellite: input.satellite || null, soil: input.soil || null, farm_context: input.farmContext || null, zone_id: input.zoneId || null, language: input.language || "ta-IN" }),
   });
-  if (!response.ok) throw new Error((await response.text()) || `Risk fusion failed (${response.status})`);
+  if (!response.ok) throw new Error(await apiErrorMessage(response, "Risk fusion failed"));
   return response.json();
 }
 
@@ -190,18 +206,18 @@ export async function reinspectCrop(input: {
     method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ farm_id: input.farmId, image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null, soil_context: input.soilContext || null }),
   });
-  if (!response.ok) throw new Error((await response.text()) || `Reinspection failed (${response.status})`);
+  if (!response.ok) throw new Error(await apiErrorMessage(response, "Reinspection failed"));
   return response.json();
 }
 
 export async function getInspectionHistory(farmId: string): Promise<{ farm_id: string; inspections: Array<Record<string, unknown>> }> {
   const response = await fetch(`${API_BASE}/ai/inspections/${encodeURIComponent(farmId)}/history`);
-  if (!response.ok) throw new Error((await response.text()) || `Inspection history failed (${response.status})`);
+  if (!response.ok) throw new Error(await apiErrorMessage(response, "Inspection history failed"));
   return response.json();
 }
 
 export async function getInspectionTimeline(farmId: string): Promise<FarmTimeline> {
   const response = await fetch(`${API_BASE}/ai/inspections/${encodeURIComponent(farmId)}/timeline`);
-  if (!response.ok) throw new Error((await response.text()) || `Inspection timeline failed (${response.status})`);
+  if (!response.ok) throw new Error(await apiErrorMessage(response, "Inspection timeline failed"));
   return response.json();
 }
