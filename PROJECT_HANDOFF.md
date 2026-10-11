@@ -129,19 +129,31 @@ The project uses several model capabilities rather than forcing one model to do 
 
 ### Vision / image inspection
 
-Primary:
+**Current prototype strategy (updated October 11, 2026): local-first vision.**
+
+Local primary:
 
 ```text
-apac.amazon.nova-lite-v1:0
+Ollama: qwen2.5vl:3b
 ```
 
-Fallback:
+The backend sends the crop image to the local Ollama endpoint first. The photo stays on the development machine when this path succeeds.
+
+Configuration:
 
 ```text
-apac.amazon.nova-pro-v1:0
+VAZHAIGUARD_LOCAL_VISION_ENABLED=true
+VAZHAIGUARD_LOCAL_VISION_MODEL=qwen2.5vl:3b
+OLLAMA_BASE_URL=http://127.0.0.1:11434
+OLLAMA_TIMEOUT_SECONDS=90
 ```
 
-The backend uses the Bedrock Converse API and tries the primary vision model first, then the fallback if the primary fails.
+If local Ollama/Qwen is unavailable or returns invalid output, the backend falls back to Bedrock vision:
+
+1. `apac.amazon.nova-lite-v1:0`
+2. `apac.amazon.nova-pro-v1:0`
+
+The Bedrock model IDs must remain inference-profile IDs. The text decision remains hosted on Bedrock using Ministral 8B. The UI reports whether local Qwen or cloud fallback produced the visual evidence.
 
 ### Farmer decision / action generation
 
