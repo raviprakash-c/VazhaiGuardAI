@@ -279,6 +279,7 @@ def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
         vision=request.vision,
         weather=request.weather,
         satellite=request.satellite,
+        soil=request.soil,
         risk=risk,
         decision=decision,
     )
@@ -379,7 +380,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         "incident": incident,
         "action_plan": incident,
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "source": "AWS Bedrock multimodal + deterministic evidence fusion + incident/action engine",
+        "source": f"{vision.get('provider', 'multimodal vision')} + hosted decision model + deterministic evidence fusion + incident/action engine",
     }
 
     if request.farm_id:
