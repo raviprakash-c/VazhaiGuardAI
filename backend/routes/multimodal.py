@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
 import uuid
@@ -23,6 +24,7 @@ from services.soil_service import get_soil_evidence
 
 router = APIRouter(prefix="/ai/multimodal", tags=["multimodal-ai"])
 TEXT_MODEL_ID = os.getenv("VAZHAIGUARD_TEXT_MODEL", "mistral.ministral-3-8b-instruct")
+logger = logging.getLogger(__name__)
 
 
 class CropInspectionRequest(BaseModel):
@@ -221,6 +223,7 @@ def inspect_crop(request: CropInspectionRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Multimodal vision inspection failed")
         raise HTTPException(status_code=503, detail="Multimodal inspection is temporarily unavailable.") from exc
     return {
         "zone_id": request.zone_id,
@@ -295,6 +298,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Multimodal vision inspection failed")
         raise HTTPException(status_code=503, detail="Multimodal inspection is temporarily unavailable.") from exc
 
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
