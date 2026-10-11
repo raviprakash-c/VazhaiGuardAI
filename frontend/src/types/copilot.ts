@@ -19,6 +19,13 @@ export interface CopilotLoopState {
     level?: string | null;
     signals_used?: string[];
   };
+  reinspection?: {
+    previous_risk_score?: number | null;
+    current_risk_score?: number | null;
+    risk_delta?: number | null;
+    trend?: "improving" | "worsening" | "stable" | "baseline";
+    recorded_at?: string | null;
+  };
 }
 
 export interface CopilotResponse {
