@@ -11,6 +11,9 @@ from pydantic import BaseModel, Field
 
 from services.bedrock_service import extract_json, generate_text
 from services.multimodal_service import (
+    LOCAL_VISION_ENABLED,
+    LOCAL_VISION_MODEL,
+    OLLAMA_BASE_URL,
     PRIMARY_VISION_MODEL,
     SECONDARY_VISION_MODEL,
     analyze_crop_image,
@@ -156,6 +159,7 @@ def _generate_farmer_decision(
     vision: dict[str, Any],
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
+    soil: dict[str, Any] | None,
     farm_context: dict[str, Any] | None,
     score: float,
     label: str,
@@ -200,9 +204,13 @@ def _generate_farmer_decision(
 def multimodal_health() -> dict[str, Any]:
     return {
         "service": "VazhaiGuard multimodal inspection",
+        "local_vision_enabled": LOCAL_VISION_ENABLED,
+        "local_vision_model": LOCAL_VISION_MODEL if LOCAL_VISION_ENABLED else None,
+        "local_vision_endpoint": OLLAMA_BASE_URL if LOCAL_VISION_ENABLED else None,
         "primary_vision_model": PRIMARY_VISION_MODEL,
         "fallback_vision_model": SECONDARY_VISION_MODEL,
         "decision_model": TEXT_MODEL_ID,
+        "vision_strategy": "local Qwen2.5-VL via Ollama first, then Bedrock vision fallback" if LOCAL_VISION_ENABLED else "Bedrock vision with configured fallback",
         "fusion": "vision + weather + optional satellite + farm context + freshness/conflict rules",
         "status": "configured",
     }
@@ -229,32 +237,35 @@ def inspect_crop(request: CropInspectionRequest) -> dict[str, Any]:
         "zone_id": request.zone_id,
         "vision": vision,
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "source": "AWS Bedrock multimodal",
+        "source": vision.get("provider", "multimodal vision"),
     }
 
 
 @router.post("/risk-fusion")
 def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
-        request.vision, request.weather, request.satellite, request.farm_context
+        request.vision, request.weather, request.satellite, request.soil, request.farm_context
     )
     try:
         decision = _generate_farmer_decision(
             vision=request.vision,
             weather=request.weather,
             satellite=request.satellite,
+            soil=request.soil,
             farm_context=request.farm_context,
             score=score,
             label=label,
             language=request.language,
         )
     except Exception as exc:
+        logger.exception("Farmer decision generation failed in risk-fusion")
         raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
 
     risk_result = calculate_unified_risk(
         vision=request.vision,
         weather=request.weather,
         satellite=request.satellite,
+        soil=request.soil,
         farm_context=request.farm_context,
     )
     risk = {
@@ -320,6 +331,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
             language=request.language,
         )
     except Exception as exc:
+        logger.exception("Farmer decision generation failed in inspect-and-decide")
         raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
 
     risk = {
@@ -331,6 +343,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
             vision=vision,
             weather=request.weather_context,
             satellite=request.satellite_context,
+            soil=request.soil_context,
             farm_context=request.farm_context,
         ).get("evidence_state", {}),
     }
