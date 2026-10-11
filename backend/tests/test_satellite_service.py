@@ -35,7 +35,7 @@ class SatelliteServiceTests(unittest.TestCase):
         self.assertIn("farmer-confirmed", scope)
 
     @patch("services.satellite_service._token", return_value="test-token")
-    @patch("services.satellite_service._stats", side_effect=[[0.62, 0.35, -0.05], [0.55, 0.31, -0.02]])
+    @patch("services.satellite_service._stats", side_effect=[([0.62, 0.35, -0.05], {"interval_count": 1, "quality": "valid_statistics"}), ([0.55, 0.31, -0.02], {"interval_count": 1, "quality": "valid_statistics"})])
     @patch("services.satellite_service._search")
     def test_real_response_shape_is_deterministic(self, search, _stats, _token):
         scene = {"id": "S2_TEST", "properties": {"datetime": "2026-10-01T05:00:00Z", "eo:cloud_cover": 4.2}}
