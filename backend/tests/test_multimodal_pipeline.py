@@ -1,7 +1,10 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from routes.multimodal import _fuse_signals, _generate_farmer_decision
+# Import the route without requiring a local AWS SSO profile in CI.
+with patch("boto3.Session") as _session_factory:
+    _session_factory.return_value.resource.return_value.Table.return_value = MagicMock()
+    from routes.multimodal import _fuse_signals, _generate_farmer_decision
 
 
 class MultimodalPipelineTests(unittest.TestCase):
