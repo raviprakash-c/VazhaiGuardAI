@@ -1,8 +1,12 @@
 import json
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-from services.multimodal_service import _analyze_with_local_ollama
+# The module constructs its AWS session at import time. Keep unit tests isolated
+# from developer-specific AWS profiles and credentials.
+with patch("boto3.Session") as _session_factory:
+    _session_factory.return_value.resource.return_value.Table.return_value = MagicMock()
+    from services.multimodal_service import _analyze_with_local_ollama
 
 
 class LocalVisionTests(unittest.TestCase):
