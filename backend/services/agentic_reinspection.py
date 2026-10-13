@@ -8,13 +8,26 @@ def _parse_iso(value: Any) -> datetime | None:
     if not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except Exception:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        # Persisted timestamps without an offset are treated as UTC, never as
+        # the host machine's local timezone.
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
+    except (TypeError, ValueError, OverflowError):
         return None
 
 
-def _severity_rank(value: Any) -> int:
-    return {"low": 0, "moderate": 1, "high": 2}.get(str(value).lower(), 0)
+def _safe_number(value: Any) -> float:
+    """Parse optional weather values without breaking the inspection planner."""
+    if value is None or isinstance(value, bool):
+        return 0.0
+    try:
+        from math import isfinite
+        number = float(value)
+        return number if isfinite(number) else 0.0
+    except (TypeError, ValueError, OverflowError):
+        return 0.0
 
 
 def plan_next_inspection(
@@ -83,10 +96,11 @@ def plan_next_inspection(
             "engine": "agentic-reinspection-v1",
         }
 
-    weather = current_weather or {}
-    next24 = weather.get("next_24_hours") or {}
-    rain = float(next24.get("max_rain_probability") or 0)
-    gust = float(next24.get("max_wind_gust") or 0)
+    weather = current_weather if isinstance(current_weather, dict) else {}
+    next24_value = weather.get("next_24_hours")
+    next24 = next24_value if isinstance(next24_value, dict) else {}
+    rain = _safe_number(next24.get("max_rain_probability"))
+    gust = _safe_number(next24.get("max_wind_gust"))
     if rain >= 80 or gust >= 45:
         peak = next24.get("peak_rain_time") or next24.get("peak_gust_time")
         when = "After the heavy rain / strong wind passes"
@@ -112,8 +126,10 @@ def plan_next_inspection(
 
     created = _parse_iso(latest.get("created_at"))
     if created:
-        age = datetime.now(timezone.utc) - created.astimezone(timezone.utc)
-        if age >= timedelta(days=7):
+        age = datetime.now(timezone.utc) - created
+        # A future timestamp can result from clock skew; it must not make an
+        # inspection immediately overdue.
+        if timedelta(0) <= age and age >= timedelta(days=7):
             return {
                 "decision": "ROUTINE_REINSPECTION_DUE",
                 "priority": "normal",

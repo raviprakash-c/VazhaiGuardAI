@@ -19,7 +19,27 @@ def _number(value: Any) -> float | None:
 
 
 def _extract_mean_uncertainty(payload: dict[str, Any], prop: str) -> tuple[float | None, float | None]:
-    values = payload.get("properties", {}).get(prop)
+    properties = payload.get("properties", {})
+    if not isinstance(properties, dict):
+        return None, None
+    # Current SoilGrids response: properties.layers[].depths[].values
+    layers = properties.get("layers")
+    if isinstance(layers, list):
+        for layer in layers:
+            if not isinstance(layer, dict) or layer.get("name") != prop:
+                continue
+            depths = layer.get("depths", [])
+            if not isinstance(depths, list):
+                return None, None
+            for depth in depths:
+                if not isinstance(depth, dict) or depth.get("label") != DEPTH:
+                    continue
+                values = depth.get("values", {})
+                if isinstance(values, dict):
+                    return _number(values.get("mean")), _number(values.get("uncertainty"))
+        return None, None
+    # Backward compatibility with the previous nested format.
+    values = properties.get(prop)
     if isinstance(values, dict):
         values = values.get(DEPTH) or values.get("0-30cm") or values
     if isinstance(values, dict):
