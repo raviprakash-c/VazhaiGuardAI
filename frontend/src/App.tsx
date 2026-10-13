@@ -12,6 +12,7 @@ import ActionPlanPage from "./pages/ActionPlanPage";
 import CopilotPage from "./pages/CopilotPage";
 import CropInspectionPage from "./pages/CropInspectionPage";
 import FarmerActionsPage from "./pages/FarmerActionsPage";
+import SatelliteEvidencePage from "./pages/SatelliteEvidencePage";
 
 export default function App() {
   return (
@@ -30,6 +31,7 @@ export default function App() {
         <Route path="copilot" element={<CopilotPage />} />
         <Route path="inspect" element={<CropInspectionPage />} />
         <Route path="actions" element={<FarmerActionsPage />} />
+        <Route path="satellite" element={<SatelliteEvidencePage />} />
         <Route path="*" element={<Navigate to="/dashboard" replace />} />
       </Route>
     </Routes>
