@@ -3,7 +3,7 @@ import { Activity, AlertTriangle, ArrowLeft, Cloud, Leaf, MapPin, RefreshCw, Sat
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "../components/ui/button";
-import { getSatelliteEvidence, getSatellitePreview, type SatelliteEvidence } from "../services/satelliteApi";
+import { getSatelliteEvidence, getSatelliteLayer, getSatellitePreview, type SatelliteEvidence, type SatelliteLayer } from "../services/satelliteApi";
 
 type FarmLocation = {
   latitude: number;
@@ -59,11 +59,18 @@ export default function SatelliteEvidencePage() {
   const [loading, setLoading] = useState(false);
   const [previewUrl, setPreviewUrl] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [selectedLayer, setSelectedLayer] = useState<SatelliteLayer>("ndvi");
+  const [layerUrl, setLayerUrl] = useState("");
+  const [layerLoading, setLayerLoading] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => () => {
     if (previewUrl) URL.revokeObjectURL(previewUrl);
   }, [previewUrl]);
+
+  useEffect(() => () => {
+    if (layerUrl) URL.revokeObjectURL(layerUrl);
+  }, [layerUrl]);
 
   const refreshEvidence = async () => {
     if (!location || loading) return;
@@ -118,6 +125,31 @@ export default function SatelliteEvidencePage() {
       setError(err instanceof Error ? err.message : "Satellite preview is not available.");
     } finally {
       setPreviewLoading(false);
+    }
+  };
+
+  const loadLayer = async (layer: SatelliteLayer) => {
+    if (!location || layerLoading) return;
+    setSelectedLayer(layer);
+    setLayerLoading(true);
+    setError("");
+    try {
+      const url = await getSatelliteLayer({
+        latitude: location.latitude,
+        longitude: location.longitude,
+        boundary: location.boundary,
+        lookbackDays: 45,
+        baselineDays: 45,
+        maxCloudPercent: 35,
+      }, layer);
+      setLayerUrl((previous) => {
+        if (previous) URL.revokeObjectURL(previous);
+        return url;
+      });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `The ${layer.toUpperCase()} layer is not available.`);
+    } finally {
+      setLayerLoading(false);
     }
   };
 
@@ -217,10 +249,21 @@ export default function SatelliteEvidencePage() {
             <div className="rounded-[28px] border border-[#dce8df] bg-white p-5 shadow-sm sm:p-6">
               <div className="flex items-center justify-between gap-3"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#146c43]">Satellite imagery</p><h2 className="mt-1 text-xl font-bold text-[#13271d]">Farm preview</h2></div><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#eef7f0] text-[#146c43]"><Satellite className="h-5 w-5" /></div></div>
               <p className="mt-2 text-xs leading-5 text-[#718078]">Preview availability depends on provider coverage, cloud conditions and the saved farm geometry.</p>
-              {previewUrl ? <img src={previewUrl} alt="Satellite preview of the confirmed farm area" className="mt-4 aspect-[4/3] w-full rounded-2xl border border-[#dce8df] bg-[#f6faf7] object-cover" /> : <div className="mt-4 flex aspect-[4/3] flex-col items-center justify-center rounded-2xl border border-dashed border-[#c8dbce] bg-[#f6faf7] p-5 text-center"><Satellite className="h-8 w-8 text-[#8da698]" /><p className="mt-3 text-sm font-bold text-[#13271d]">Imagery preview</p><p className="mt-1 text-xs leading-5 text-[#718078]">Load the available scene when you're ready.</p></div>}
+              {previewUrl ? <img src={previewUrl} alt="Satellite preview of the confirmed farm area" className="mt-4 aspect-[4/3] w-full rounded-2xl border border-[#dce8df] bg-[#f6faf7] object-cover" /> : <div className="mt-4 flex aspect-[4/3] flex-col items-center justify-center rounded-2xl border border-dashed border-[#c8dbce] bg-[#f6faf7] p-5 text-center"><Satellite className="h-8 w-8 text-[#8da698]" /><p className="mt-3 text-sm font-bold text-[#13271d]">True-colour imagery</p><p className="mt-1 text-xs leading-5 text-[#718078]">Load a scene preview when you're ready.</p></div>}
               <Button onClick={loadPreview} disabled={!location || previewLoading} variant="outline" className="mt-4 min-h-11 w-full rounded-xl border-[#c8dbce] text-[#0b4d36] hover:bg-[#eef7f0]">
-                <Satellite className={`mr-2 h-4 w-4 ${previewLoading ? "animate-pulse" : ""}`} />{previewLoading ? "Loading imagery…" : "Load farm preview"}
+                <Satellite className={`mr-2 h-4 w-4 ${previewLoading ? "animate-pulse" : ""}`} />{previewLoading ? "Loading imagery…" : "Load true-colour preview"}
               </Button>
+              <div className="mt-6 border-t border-[#e7efe9] pt-5">
+                <div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[#146c43]">Analysis layers</p><h3 className="mt-1 text-base font-bold text-[#13271d]">Explore satellite signals</h3><p className="mt-1 text-xs leading-5 text-[#718078]">Each layer is a derived view, not a direct diagnosis.</p></div>
+                <div className="mt-3 grid grid-cols-2 gap-2">
+                  {([{ id: "ndvi", label: "NDVI · Greenness" }, { id: "ndre", label: "NDRE · Red edge" }, { id: "ndwi", label: "NDWI · Water" }, { id: "stress", label: "Stress signal" }] as const).map((layer) => (
+                    <Button key={layer.id} type="button" variant={selectedLayer === layer.id ? "default" : "outline"} disabled={!location || layerLoading} onClick={() => loadLayer(layer.id)} className={`min-h-10 rounded-xl text-xs ${selectedLayer === layer.id ? "bg-[#0b4d36] text-white hover:bg-[#146c43]" : "border-[#c8dbce] text-[#0b4d36] hover:bg-[#eef7f0]"}`}>
+                      {layerLoading && selectedLayer === layer.id ? <RefreshCw className="mr-2 h-3.5 w-3.5 animate-spin" /> : null}{layer.label}
+                    </Button>
+                  ))}
+                </div>
+                {layerUrl ? <img src={layerUrl} alt={`Satellite ${selectedLayer.toUpperCase()} analysis layer for the confirmed farm`} className="mt-3 aspect-[4/3] w-full rounded-2xl border border-[#dce8df] bg-[#f6faf7] object-cover" /> : <div className="mt-3 rounded-2xl bg-[#f6faf7] p-4 text-xs leading-5 text-[#718078]">Choose a layer to request its current map image. If no clear satellite scene is available, the service will explain that it cannot produce the layer.</div>}
+              </div>
             </div>
           </section>
 
