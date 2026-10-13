@@ -18,6 +18,8 @@ from routes.satellite import router as satellite_router
 from routes.multimodal import router as multimodal_router
 from routes.soil import router as soil_router
 from routes.inspections import router as inspections_router
+from routes.evidence import router as evidence_router
+from routes.followup import router as followup_router
 
 
 # ------------------------------------------------------------
@@ -102,6 +104,8 @@ app.include_router(satellite_router)
 app.include_router(multimodal_router)
 app.include_router(soil_router)
 app.include_router(inspections_router)
+app.include_router(evidence_router)
+app.include_router(followup_router)
 
 
 # ------------------------------------------------------------
