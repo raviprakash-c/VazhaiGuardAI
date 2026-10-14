@@ -1,4 +1,4 @@
-import { Bot, ChartNoAxesCombined, CheckCircle2, CloudSun, FileText, LayoutDashboard, Map, Mic, ScanSearch, Settings, ShieldAlert, Sparkles, Satellite, Tractor } from "lucide-react";
+import { Bot, ChartNoAxesCombined, CheckCircle2, CloudSun, FileText, FlaskConical, LayoutDashboard, Map, Mic, ScanSearch, Settings, ShieldAlert, Sparkles, Satellite, Tractor } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import VazhaiLogo from "../branding/VazhaiLogo";
 
@@ -10,6 +10,7 @@ const primaryNavigation = [
   { name: "Risk Analysis", icon: ShieldAlert, path: "/risk", enabled: true },
   { name: "Farm Risk Map", tamilName: "ஆபத்து வரைபடம்", icon: Map, path: "/risk-map", enabled: true },
   { name: "Satellite Evidence", tamilName: "செயற்கைக்கோள் ஆதாரம்", icon: Satellite, path: "/satellite", enabled: true, badge: "NEW" },
+  { name: "Soil Evidence", tamilName: "மண் ஆதாரம்", icon: FlaskConical, path: "/soil", enabled: true, badge: "NEW" },
   { name: "Storm Plan", icon: Sparkles, path: "/plan", enabled: true },
   { name: "Crop Photo Check", tamilName: "பயிர் படம்", icon: ScanSearch, path: "/inspect", enabled: true, badge: "AI" },
   { name: "My Actions", tamilName: "என் நடவடிக்கை", icon: CheckCircle2, path: "/actions", enabled: true, badge: "NEW" },
@@ -35,7 +36,7 @@ export default function DesktopSidebar() {
             return item.enabled ? <NavLink key={item.name} to={item.path} className={({ isActive }) => `group relative flex w-full items-center justify-between overflow-hidden rounded-xl px-3 py-3 text-left transition-all duration-200 ${isActive ? "bg-white text-[#073b2a] shadow-sm" : "text-white/68 hover:bg-white/[0.08] hover:text-white"}`}>
               {({ isActive }) => <>
                 {isActive && <div className="absolute bottom-2 left-0 top-2 w-[3px] rounded-r-full bg-[#b8df4b]" />}
-                <div className="flex min-w-0 items-center gap-3"><Icon className={`h-[19px] w-[19px] shrink-0 ${isActive ? "text-[#146c43]" : ["Voice Registration", "AI Copilot", "Crop Photo Check", "Farm Risk Map", "My Actions", "Satellite Evidence"].includes(item.name) ? "text-[#b8df4b]" : "text-white/60 group-hover:text-white"}`} strokeWidth={2} /><div className="min-w-0"><span className="block truncate text-[14px] font-medium">{item.name}</span>{item.tamilName && <span className={`mt-0.5 block text-[9px] ${isActive ? "text-[#146c43]/70" : "text-white/35"}`}>{item.tamilName}</span>}</div></div>
+                <div className="flex min-w-0 items-center gap-3"><Icon className={`h-[19px] w-[19px] shrink-0 ${isActive ? "text-[#146c43]" : ["Voice Registration", "AI Copilot", "Crop Photo Check", "Farm Risk Map", "My Actions", "Satellite Evidence", "Soil Evidence"].includes(item.name) ? "text-[#b8df4b]" : "text-white/60 group-hover:text-white"}`} strokeWidth={2} /><div className="min-w-0"><span className="block truncate text-[14px] font-medium">{item.name}</span>{item.tamilName && <span className={`mt-0.5 block text-[9px] ${isActive ? "text-[#146c43]/70" : "text-white/35"}`}>{item.tamilName}</span>}</div></div>
                 {item.badge && <span className={`rounded-full px-2 py-0.5 text-[8px] font-bold uppercase tracking-wide ${isActive ? "bg-[#eaf5ec] text-[#146c43]" : "bg-[#b8df4b] text-[#073b2a]"}`}>{item.badge}</span>}
               </>}
             </NavLink> : null;
