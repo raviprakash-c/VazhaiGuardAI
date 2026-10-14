@@ -75,7 +75,13 @@ def _freshness(age_hours: float | None, source: str) -> str:
 def soil_reliability(soil: dict[str, Any] | None) -> float:
     if not soil or not soil.get("available"):
         return 0.0
-    return min(0.40, max(0.10, float(soil.get("confidence", 0.35) or 0.35)))
+    try:
+        confidence = float(soil.get("confidence", 0.35) or 0.35)
+    except (TypeError, ValueError):
+        confidence = 0.35
+    if not 0.0 <= confidence <= 1.0:
+        confidence = 0.35
+    return min(0.40, max(0.10, confidence))
 
 
 def satellite_reliability(satellite: dict[str, Any] | None) -> float:
@@ -151,6 +157,14 @@ def build_evidence_state(
         })
 
     satellite_factor = satellite_reliability(satellite)
+    satellite_status = freshness["satellite"]["status"]
+    if satellite_status == "stale" or any(
+        conflict.get("type") == "temporal_crop_conflict" for conflict in conflicts
+    ):
+        # Keep old/conflicting imagery visible in freshness metadata, but exclude
+        # it from current plant-level decision weights.
+        satellite_factor = 0.0
+
     soil_factor = soil_reliability(soil)
     effective_weights = dict(BASE_WEIGHTS)
     effective_weights["satellite"] *= satellite_factor
