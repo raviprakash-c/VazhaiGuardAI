@@ -211,7 +211,7 @@ def multimodal_health() -> dict[str, Any]:
         "fallback_vision_model": SECONDARY_VISION_MODEL,
         "decision_model": TEXT_MODEL_ID,
         "vision_strategy": "local Qwen2.5-VL via Ollama first, then Bedrock vision fallback" if LOCAL_VISION_ENABLED else "Bedrock vision with configured fallback",
-        "fusion": "vision + weather + optional satellite + farm context + freshness/conflict rules",
+        "fusion": "vision + weather + optional satellite + optional SoilGrids context + farm context + freshness/conflict rules",
         "status": "configured",
     }
 
