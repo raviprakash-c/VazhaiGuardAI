@@ -24,6 +24,8 @@ from services.decision_evaluator import evaluate_multimodal_decision
 from services.incident_engine import build_incident_and_action_plan
 from services.inspection_storage import create_inspection_record, save_inspection_record, store_photo
 from services.soil_service import get_soil_evidence
+from services.dynamodb_service import get_farm
+from services.satellite_service import analyze_satellite_evidence
 
 router = APIRouter(prefix="/ai/multimodal", tags=["multimodal-ai"])
 TEXT_MODEL_ID = os.getenv("VAZHAIGUARD_TEXT_MODEL", "mistral.ministral-3-8b-instruct")
@@ -295,6 +297,59 @@ def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
     }
 
 
+def _resolve_satellite_context(
+    *,
+    farm_id: str | None,
+    latitude: float | None,
+    longitude: float | None,
+    supplied_context: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Preserve supplied evidence and fetch Copernicus data only for confirmed farm polygons."""
+    if supplied_context is not None:
+        return supplied_context
+
+    if not farm_id or latitude is None or longitude is None:
+        return None
+
+    try:
+        farm = get_farm(farm_id)
+        if not farm:
+            logger.info("Satellite acquisition skipped: registered farm not found.")
+            return None
+
+        if farm.get("farmer_confirmed") is not True:
+            logger.info("Satellite acquisition skipped: farm boundary is not confirmed.")
+            return None
+
+        boundary = farm.get("boundary")
+        if (
+            not isinstance(boundary, dict)
+            or boundary.get("type") != "Polygon"
+            or not isinstance(boundary.get("coordinates"), list)
+            or not boundary.get("coordinates")
+        ):
+            logger.info("Satellite acquisition skipped: confirmed Polygon boundary unavailable.")
+            return None
+
+        return analyze_satellite_evidence(
+            latitude=latitude,
+            longitude=longitude,
+            boundary=boundary,
+        )
+    except Exception as exc:
+        logger.warning(
+            "Satellite evidence acquisition failed; continuing without it: %s",
+            type(exc).__name__,
+        )
+        return {
+            "available": False,
+            "status": "unavailable",
+            "provider": "Copernicus Data Space Ecosystem",
+            "analysis_scope": "farm_level_context",
+            "reason": "Satellite evidence could not be retrieved.",
+        }
+
+
 @router.post("/inspect-and-decide")
 def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     started = time.perf_counter()
@@ -313,10 +368,17 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         logger.exception("Multimodal vision inspection failed")
         raise HTTPException(status_code=503, detail="Multimodal inspection is temporarily unavailable.") from exc
 
+    satellite_context = _resolve_satellite_context(
+        farm_id=request.farm_id,
+        latitude=request.latitude,
+        longitude=request.longitude,
+        supplied_context=request.satellite_context,
+    )
+
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
         vision,
         request.weather_context,
-        request.satellite_context,
+        satellite_context,
         request.soil_context,
         request.farm_context,
     )
@@ -324,7 +386,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         decision = _generate_farmer_decision(
             vision=vision,
             weather=request.weather_context,
-            satellite=request.satellite_context,
+            satellite=satellite_context,
             soil=request.soil_context,
             farm_context=request.farm_context,
             score=score,
@@ -343,7 +405,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         "evidence_state": calculate_unified_risk(
             vision=vision,
             weather=request.weather_context,
-            satellite=request.satellite_context,
+            satellite=satellite_context,
             soil=request.soil_context,
             farm_context=request.farm_context,
         ).get("evidence_state", {}),
@@ -351,7 +413,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     evaluation = evaluate_multimodal_decision(
         vision=vision,
         weather=request.weather_context,
-        satellite=request.satellite_context,
+        satellite=satellite_context,
         soil=request.soil_context,
         risk=risk,
         decision=decision,
@@ -359,7 +421,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     incident = build_incident_and_action_plan(
         vision=vision,
         weather=request.weather_context,
-        satellite=request.satellite_context,
+        satellite=satellite_context,
         evaluation=evaluation,
         farm_context=request.farm_context,
     )
@@ -371,6 +433,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         "farm_id": request.farm_id,
         "zone_id": request.zone_id,
         "vision": vision,
+        "satellite": satellite_context,
         "risk": risk,
         "signal_scores": signal_scores,
         "decision": decision,
