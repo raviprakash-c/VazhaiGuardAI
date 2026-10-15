@@ -1,6 +1,8 @@
 import unittest
 from unittest.mock import patch
 
+from decimal import Decimal
+
 from services.satellite_service import _geometry, _satellite_stress, analyze_satellite_evidence, satellite_configuration_status
 
 
@@ -26,6 +28,20 @@ class SatelliteServiceTests(unittest.TestCase):
         score, confidence = _satellite_stress(None, 0.2, 0.1)
         self.assertIsNone(score)
         self.assertIsNone(confidence)
+
+    def test_bbox_accepts_dynamodb_decimal_coordinates(self):
+        from services.satellite_service import _bbox
+
+        geometry = {
+            "type": "Polygon",
+            "coordinates": [[
+                [Decimal("78.0"), Decimal("10.0")],
+                [Decimal("78.2"), Decimal("10.0")],
+                [Decimal("78.2"), Decimal("10.3")],
+                [Decimal("78.0"), Decimal("10.0")],
+            ]],
+        }
+        self.assertEqual(_bbox(geometry), [78.0, 10.0, 78.2, 10.3])
 
     def test_boundary_is_preserved_as_farmer_confirmed(self):
         boundary = {"type": "Polygon", "coordinates": [[[78.0, 10.0], [78.001, 10.0], [78.001, 10.001], [78.0, 10.0]]]}
