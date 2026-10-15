@@ -36,6 +36,10 @@ class CropInspectionRequest(BaseModel):
     farm_id: str | None = Field(default=None, max_length=100)
     image_data_url: str = Field(min_length=32, max_length=12_000_000)
     language: str = Field(default="ta-IN", min_length=2, max_length=16)
+    # Coordinates are optional for backwards compatibility. Automatic satellite
+    # retrieval still requires a registered, farmer-confirmed farm polygon.
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     farm_context: dict[str, Any] | None = None
     weather_context: dict[str, Any] | None = None
     satellite_context: dict[str, Any] | None = None
