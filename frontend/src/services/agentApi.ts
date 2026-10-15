@@ -38,6 +38,7 @@ export interface ActionFeedbackResponse {
   next_state: string;
   farmer_message: string;
   recorded_at: string;
+  persisted: boolean;
 }
 
 export async function sendActionFeedback(
@@ -114,6 +115,18 @@ export function getLatestAgentLoop<T>(): T | null {
   if (!raw) return null;
   try {
     return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function getSavedFarmId(): string | null {
+  try {
+    const raw = window.localStorage.getItem("vazhaiguard_farm_complete");
+    if (!raw) return null;
+    const farm = JSON.parse(raw) as Record<string, unknown>;
+    const value = farm.farm_id || farm.farmId;
+    return typeof value === "string" && value.trim() ? value.trim() : null;
   } catch {
     return null;
   }
