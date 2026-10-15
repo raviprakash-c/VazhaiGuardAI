@@ -4,7 +4,11 @@ from unittest.mock import MagicMock, patch
 # Import the route without requiring a local AWS SSO profile in CI.
 with patch("boto3.Session") as _session_factory:
     _session_factory.return_value.resource.return_value.Table.return_value = MagicMock()
-    from routes.multimodal import _fuse_signals, _generate_farmer_decision
+    from routes.multimodal import (
+        _fuse_signals,
+        _generate_farmer_decision,
+        _resolve_satellite_context,
+    )
 
 
 class MultimodalPipelineTests(unittest.TestCase):
@@ -36,6 +40,98 @@ class MultimodalPipelineTests(unittest.TestCase):
         _fuse_signals({"visual_confidence": 0.7}, None, None, soil, farm)
         self.assertEqual(calculate.call_args.kwargs["soil"], soil)
         self.assertEqual(calculate.call_args.kwargs["farm_context"], farm)
+
+
+    def test_satellite_resolver_preserves_explicit_context(self):
+        supplied = {"available": True, "provider": "caller", "ndvi": 0.7}
+        with patch("routes.multimodal.get_farm") as mock_farm, patch(
+            "routes.multimodal.analyze_satellite_evidence"
+        ) as mock_analyze:
+            result = _resolve_satellite_context(
+                farm_id="farm-test",
+                latitude=9.0,
+                longitude=78.0,
+                supplied_context=supplied,
+            )
+        self.assertIs(result, supplied)
+        mock_farm.assert_not_called()
+        mock_analyze.assert_not_called()
+
+    def test_satellite_resolver_skips_unconfirmed_boundary(self):
+        with patch(
+            "routes.multimodal.get_farm",
+            return_value={
+                "farm_id": "farm-test",
+                "farmer_confirmed": False,
+                "boundary": {
+                    "type": "Polygon",
+                    "coordinates": [[[78.0, 9.0], [78.1, 9.0], [78.1, 9.1], [78.0, 9.0]]],
+                },
+            },
+        ), patch("routes.multimodal.analyze_satellite_evidence") as mock_analyze:
+            result = _resolve_satellite_context(
+                farm_id="farm-test",
+                latitude=9.05,
+                longitude=78.05,
+                supplied_context=None,
+            )
+        self.assertIsNone(result)
+        mock_analyze.assert_not_called()
+
+    def test_satellite_resolver_fetches_confirmed_farm_evidence(self):
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [[[78.0, 9.0], [78.1, 9.0], [78.1, 9.1], [78.0, 9.0]]],
+        }
+        expected = {"available": True, "provider": "Copernicus"}
+        with patch(
+            "routes.multimodal.get_farm",
+            return_value={
+                "farm_id": "farm-test",
+                "farmer_confirmed": True,
+                "boundary": boundary,
+            },
+        ), patch(
+            "routes.multimodal.analyze_satellite_evidence",
+            return_value=expected,
+        ) as mock_analyze:
+            result = _resolve_satellite_context(
+                farm_id="farm-test",
+                latitude=9.05,
+                longitude=78.05,
+                supplied_context=None,
+            )
+        self.assertIs(result, expected)
+        mock_analyze.assert_called_once_with(
+            latitude=9.05,
+            longitude=78.05,
+            boundary=boundary,
+        )
+
+    def test_satellite_resolver_fails_open_when_provider_errors(self):
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [[[78.0, 9.0], [78.1, 9.0], [78.1, 9.1], [78.0, 9.0]]],
+        }
+        with patch(
+            "routes.multimodal.get_farm",
+            return_value={
+                "farm_id": "farm-test",
+                "farmer_confirmed": True,
+                "boundary": boundary,
+            },
+        ), patch(
+            "routes.multimodal.analyze_satellite_evidence",
+            side_effect=RuntimeError("provider unavailable"),
+        ):
+            result = _resolve_satellite_context(
+                farm_id="farm-test",
+                latitude=9.05,
+                longitude=78.05,
+                supplied_context=None,
+            )
+        self.assertFalse(result["available"])
+        self.assertEqual(result["status"], "unavailable")
 
 
 if __name__ == "__main__":
