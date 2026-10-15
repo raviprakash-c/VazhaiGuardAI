@@ -183,6 +183,8 @@ export default function CropInspectionPage() {
         farmId: farmId || undefined,
         language: "ta-IN",
         zoneId: "field-photo",
+        latitude: location?.latitude,
+        longitude: location?.longitude,
         farmContext: {
           ...savedFarmProfile,
           farm_name: savedFarmProfile.farm_name || savedFarmProfile.name || "your farm",
