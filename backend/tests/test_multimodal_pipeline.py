@@ -5,6 +5,7 @@ from unittest.mock import MagicMock, patch
 with patch("boto3.Session") as _session_factory:
     _session_factory.return_value.resource.return_value.Table.return_value = MagicMock()
     from routes.multimodal import (
+        CropInspectionRequest,
         _fuse_signals,
         _generate_farmer_decision,
         _resolve_satellite_context,
@@ -12,6 +13,15 @@ with patch("boto3.Session") as _session_factory:
 
 
 class MultimodalPipelineTests(unittest.TestCase):
+    def test_inspection_request_accepts_valid_coordinates(self):
+        request = CropInspectionRequest(
+            image_data_url="data:image/png;base64," + ("a" * 40),
+            latitude=13.0827,
+            longitude=80.2707,
+        )
+        self.assertAlmostEqual(request.latitude, 13.0827)
+        self.assertAlmostEqual(request.longitude, 80.2707)
+
     @patch("routes.multimodal.generate_text", return_value='{"summary":"Check the plant","priority_actions":[],"follow_up_check":"Check soil moisture","recheck_after":"Tomorrow","needs_field_verification":true,"farmer_message":"இலையை மீண்டும் சரிபார்க்கவும்"}')
     def test_decision_prompt_accepts_and_includes_soil(self, generate_text):
         soil = {"available": True, "provider": "SoilGrids", "ph": 6.2}
