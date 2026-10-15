@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from routes.multimodal import _fuse_signals, _generate_farmer_decision
 from services.multimodal_service import analyze_crop_image, decode_data_url
+from services.farmer_feedback import build_feedback_event, get_feedback_history, persist_feedback
 
 
 router = APIRouter(prefix="/agent", tags=["agent-follow-up"])
@@ -27,6 +28,7 @@ class ActionFeedbackResponse(BaseModel):
     next_state: str
     farmer_message: str
     recorded_at: str
+    persisted: bool = False
 
 
 class ReinspectionRequest(BaseModel):
@@ -129,6 +131,26 @@ def submit_action_feedback(request: ActionFeedbackRequest):
         "recheck": "capture_photo",
     }
     language_messages = MESSAGES["ta-IN" if request.language.lower().startswith("ta") else "en-IN"]
+    recorded_at = datetime.now(timezone.utc).isoformat()
+    persisted = False
+
+    if request.farmer_id:
+        event = build_feedback_event(
+            action_id=request.action_id,
+            outcome=request.outcome,
+            farmer_id=request.farmer_id,
+            language=request.language,
+            note=request.note,
+            recorded_at=recorded_at,
+        )
+        try:
+            persist_feedback(farm_id=request.farmer_id, event=event)
+            persisted = True
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Feedback could not be saved to farm history. Please retry.",
+            ) from exc
 
     return ActionFeedbackResponse(
         success=True,
@@ -136,8 +158,20 @@ def submit_action_feedback(request: ActionFeedbackRequest):
         outcome=request.outcome,
         next_state=next_states[request.outcome],
         farmer_message=language_messages[request.outcome],
-        recorded_at=datetime.now(timezone.utc).isoformat(),
+        recorded_at=recorded_at,
+        persisted=persisted,
     )
+
+
+@router.get("/feedback/{farm_id}")
+def action_feedback_history(farm_id: str):
+    try:
+        entries = get_feedback_history(farm_id=farm_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Farm was not found.") from exc
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Feedback history is temporarily unavailable.") from exc
+    return {"farm_id": farm_id, "feedback": entries, "count": len(entries)}
 
 
 @router.post("/reinspect", response_model=ReinspectionResponse)
