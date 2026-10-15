@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Camera, CheckCircle2, CircleHelp, Clock3, Leaf, MessageCircle, RefreshCw, Volume2 } from "lucide-react";
-import { getLatestAgentLoop, getStoredFarmContext, reinspectAfterFeedback, sendActionFeedback } from "../services/agentApi";
+import { getLatestAgentLoop, getSavedFarmId, getStoredFarmContext, reinspectAfterFeedback, sendActionFeedback } from "../services/agentApi";
 import { useVoiceAssistant } from "../hooks/useVoiceAssistant";
 import type { CopilotLanguage, CopilotLoopState } from "../types/copilot";
 
@@ -74,10 +74,16 @@ export default function FarmerActionsPage() {
       const result = await sendActionFeedback({
         action_id: loop.action_id,
         outcome,
-        farmer_id: typeof context.farm_id === "string" ? context.farm_id : null,
+        farmer_id: getSavedFarmId(),
         language,
       });
-      setMessage(result.farmer_message);
+      setMessage(
+        result.persisted
+          ? result.farmer_message
+          : (tamil
+              ? "பதில் கிடைத்தது; ஆனால் பண்ணை ID இல்லை என்பதால் கருத்து வரலாற்றில் சேமிக்கப்படவில்லை. முதலில் பண்ணையைச் சேமிக்கவும்."
+              : "Feedback was received but not saved to farm history because the farm ID is missing. Save the farm first.")
+      );
       const nextLoop = { ...loop, state: result.next_state };
       setLoop(nextLoop);
       window.localStorage.setItem("vazhaiguard_latest_agent_loop", JSON.stringify(nextLoop));
