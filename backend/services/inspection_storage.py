@@ -81,6 +81,8 @@ def create_inspection_record(*, farm_id: str, inspection_id: str, parent_inspect
         },
         "incident": result.get("incident", {}),
         "action_plan": result.get("action_plan", {}),
+        "satellite": result.get("satellite"),
+        "soil": result.get("soil"),
         "risk": result.get("risk", {}),
         "evaluation": result.get("evaluation", {}),
         "decision": result.get("decision", {}),
