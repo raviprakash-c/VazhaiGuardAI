@@ -5,7 +5,12 @@ from typing import Any, Dict, Literal, Optional
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
-from routes.multimodal import _fuse_signals, _generate_farmer_decision
+from routes.multimodal import (
+    _fuse_signals,
+    _generate_farmer_decision,
+    _resolve_satellite_context,
+    _resolve_soil_context,
+)
 from services.multimodal_service import analyze_crop_image, decode_data_url
 
 
@@ -38,6 +43,10 @@ class ReinspectionRequest(BaseModel):
     previous_risk_level: Optional[str] = Field(default=None, max_length=30)
     weather_context: Optional[Dict[str, Any]] = None
     satellite_context: Optional[Dict[str, Any]] = None
+    soil_context: Optional[Dict[str, Any]] = None
+    farm_id: Optional[str] = Field(default=None, max_length=100)
+    latitude: Optional[float] = Field(default=None, ge=-90, le=90)
+    longitude: Optional[float] = Field(default=None, ge=-180, le=180)
     farm_context: Optional[Dict[str, Any]] = None
 
 
@@ -58,6 +67,8 @@ class ReinspectionResponse(BaseModel):
     follow_up_check: str
     recheck_after: str
     signals_used: list[str]
+    satellite_evidence: Optional[Dict[str, Any]] = None
+    soil_evidence: Optional[Dict[str, Any]] = None
     model: Optional[str] = None
     recorded_at: str
 
@@ -158,15 +169,30 @@ def reinspect_after_feedback(request: ReinspectionRequest):
             farm_context=request.farm_context,
             weather_context=request.weather_context,
         )
+        satellite_context = _resolve_satellite_context(
+            farm_id=request.farm_id,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            supplied_context=request.satellite_context,
+        )
+        soil_context = _resolve_soil_context(
+            farm_id=request.farm_id,
+            latitude=request.latitude,
+            longitude=request.longitude,
+            supplied_context=request.soil_context,
+        )
         score, label, _signal_scores, signals_used, _weights = _fuse_signals(
             vision,
             request.weather_context,
-            request.satellite_context,
+            satellite_context,
+            soil_context,
+            request.farm_context,
         )
         decision = _generate_farmer_decision(
             vision=vision,
             weather=request.weather_context,
-            satellite=request.satellite_context,
+            satellite=satellite_context,
+            soil=soil_context,
             farm_context=request.farm_context,
             score=score,
             label=label,
@@ -216,6 +242,8 @@ def reinspect_after_feedback(request: ReinspectionRequest):
         follow_up_check=follow_up_check,
         recheck_after=recheck_after,
         signals_used=signals_used,
+        satellite_evidence=satellite_context,
+        soil_evidence=soil_context,
         model=vision.get("model"),
         recorded_at=datetime.now(timezone.utc).isoformat(),
     )

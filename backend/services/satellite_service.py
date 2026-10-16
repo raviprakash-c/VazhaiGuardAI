@@ -106,19 +106,29 @@ def _canonical_polygon(geometry: dict[str, Any]) -> dict[str, Any]:
 
 
 def _bbox(geometry: dict[str, Any]) -> list[float]:
+    """Return a WGS84 bbox while accepting DynamoDB Decimal coordinates."""
     points: list[tuple[float, float]] = []
 
     def walk(value: Any) -> None:
         if isinstance(value, (list, tuple)):
-            if (
-                len(value) >= 2
-                and isinstance(value[0], (int, float))
-                and isinstance(value[1], (int, float))
-            ):
-                points.append((float(value[0]), float(value[1])))
-            else:
-                for child in value:
-                    walk(child)
+            # GeoJSON positions may contain Decimal values after a DynamoDB
+            # read. Convert candidate pairs rather than restricting them to
+            # built-in int/float types.
+            if len(value) >= 2 and not isinstance(value[0], (list, tuple, dict)):
+                try:
+                    longitude = float(value[0])
+                    latitude = float(value[1])
+                except (TypeError, ValueError, OverflowError):
+                    for child in value:
+                        walk(child)
+                    return
+
+                if math.isfinite(longitude) and math.isfinite(latitude):
+                    points.append((longitude, latitude))
+                    return
+
+            for child in value:
+                walk(child)
         elif isinstance(value, dict):
             walk(value.get("coordinates"))
             for child in value.get("geometries", []):
@@ -128,8 +138,8 @@ def _bbox(geometry: dict[str, Any]) -> list[float]:
     if not points:
         raise ValueError("Farm boundary contains no valid coordinates.")
 
-    lngs, lats = zip(*points)
-    return [min(lngs), min(lats), max(lngs), max(lats)]
+    longitudes, latitudes = zip(*points)
+    return [min(longitudes), min(latitudes), max(longitudes), max(latitudes)]
 
 
 def _iso(value: datetime) -> str:

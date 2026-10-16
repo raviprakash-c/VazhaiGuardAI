@@ -176,11 +176,12 @@ export async function inspectCropImage(input: {
 
 export async function inspectAndDecide(input: {
   imageDataUrl: string; farmId?: string; language?: string; zoneId?: string;
+  latitude?: number; longitude?: number;
   farmContext?: Record<string, unknown>; weatherContext?: Record<string, unknown>; satelliteContext?: Record<string, unknown>; soilContext?: Record<string, unknown>;
 }): Promise<InspectAndDecideResult> {
   const response = await fetch(`${API_BASE}/ai/multimodal/inspect-and-decide`, {
     method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ farm_id: input.farmId || null, image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, farm_context: input.farmContext || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null, soil_context: input.soilContext || null }),
+    body: JSON.stringify({ farm_id: input.farmId || null, image_data_url: input.imageDataUrl, language: input.language || "ta-IN", zone_id: input.zoneId || null, latitude: input.latitude ?? null, longitude: input.longitude ?? null, farm_context: input.farmContext || null, weather_context: input.weatherContext || null, satellite_context: input.satelliteContext || null, soil_context: input.soilContext || null }),
   });
   if (!response.ok) throw new Error(await apiErrorMessage(response, "Multimodal decision failed"));
   return response.json();

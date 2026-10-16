@@ -60,6 +60,10 @@ export interface ReinspectionRequest {
   previous_risk_level?: string | null;
   weather_context?: Record<string, unknown> | null;
   satellite_context?: Record<string, unknown> | null;
+  soil_context?: Record<string, unknown> | null;
+  farm_id?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
   farm_context?: Record<string, unknown> | null;
 }
 
@@ -80,6 +84,8 @@ export interface ReinspectionResponse {
   follow_up_check: string;
   recheck_after: string;
   signals_used: string[];
+  satellite_evidence?: Record<string, unknown> | null;
+  soil_evidence?: Record<string, unknown> | null;
   model?: string | null;
   recorded_at: string;
 }

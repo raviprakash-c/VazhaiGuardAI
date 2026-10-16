@@ -36,6 +36,10 @@ class CropInspectionRequest(BaseModel):
     farm_id: str | None = Field(default=None, max_length=100)
     image_data_url: str = Field(min_length=32, max_length=12_000_000)
     language: str = Field(default="ta-IN", min_length=2, max_length=16)
+    # Coordinates are optional for backwards compatibility. Automatic satellite
+    # retrieval still requires a registered, farmer-confirmed farm polygon.
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     farm_context: dict[str, Any] | None = None
     weather_context: dict[str, Any] | None = None
     satellite_context: dict[str, Any] | None = None
@@ -350,6 +354,52 @@ def _resolve_satellite_context(
         }
 
 
+def _resolve_soil_context(
+    *,
+    farm_id: str | None,
+    latitude: float | None,
+    longitude: float | None,
+    supplied_context: dict[str, Any] | None,
+) -> dict[str, Any] | None:
+    """Preserve supplied soil evidence and acquire coarse context only for a confirmed farm."""
+    if supplied_context is not None:
+        return supplied_context
+
+    if not farm_id or latitude is None or longitude is None:
+        return None
+
+    try:
+        farm = get_farm(farm_id)
+        if not farm or farm.get("farmer_confirmed") is not True:
+            logger.info("Soil acquisition skipped: registered farm is not confirmed.")
+            return None
+
+        boundary = farm.get("boundary")
+        if (
+            not isinstance(boundary, dict)
+            or boundary.get("type") != "Polygon"
+            or not isinstance(boundary.get("coordinates"), list)
+            or not boundary.get("coordinates")
+        ):
+            logger.info("Soil acquisition skipped: confirmed Polygon boundary unavailable.")
+            return None
+
+        return get_soil_evidence(latitude=latitude, longitude=longitude)
+    except Exception as exc:
+        logger.warning(
+            "Soil evidence acquisition failed; continuing without it: %s",
+            type(exc).__name__,
+        )
+        return {
+            "available": False,
+            "status": "unavailable",
+            "provider": "ISRIC SoilGrids",
+            "scope": "coarse_soil_context",
+            "reason": "Soil evidence could not be retrieved.",
+            "warnings": ["Soil evidence is unavailable; other current evidence remains usable."],
+        }
+
+
 @router.post("/inspect-and-decide")
 def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     started = time.perf_counter()
@@ -374,12 +424,18 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         longitude=request.longitude,
         supplied_context=request.satellite_context,
     )
+    soil_context = _resolve_soil_context(
+        farm_id=request.farm_id,
+        latitude=request.latitude,
+        longitude=request.longitude,
+        supplied_context=request.soil_context,
+    )
 
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
         vision,
         request.weather_context,
         satellite_context,
-        request.soil_context,
+        soil_context,
         request.farm_context,
     )
     try:
@@ -387,7 +443,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
             vision=vision,
             weather=request.weather_context,
             satellite=satellite_context,
-            soil=request.soil_context,
+            soil=soil_context,
             farm_context=request.farm_context,
             score=score,
             label=label,
@@ -406,7 +462,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
             vision=vision,
             weather=request.weather_context,
             satellite=satellite_context,
-            soil=request.soil_context,
+            soil=soil_context,
             farm_context=request.farm_context,
         ).get("evidence_state", {}),
     }
@@ -414,7 +470,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         vision=vision,
         weather=request.weather_context,
         satellite=satellite_context,
-        soil=request.soil_context,
+        soil=soil_context,
         risk=risk,
         decision=decision,
     )
@@ -434,6 +490,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         "zone_id": request.zone_id,
         "vision": vision,
         "satellite": satellite_context,
+        "soil": soil_context,
         "risk": risk,
         "signal_scores": signal_scores,
         "decision": decision,
@@ -454,6 +511,19 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
                 image_bytes=image_bytes,
                 content_type=content_type,
             )
+        except Exception as exc:
+            logger.warning("Inspection photo storage failed: %s", type(exc).__name__)
+            storage = {
+                "stored": False,
+                "status": "storage_error",
+                "bucket": None,
+                "key": None,
+                "s3_uri": None,
+                "error": type(exc).__name__,
+            }
+
+        result["inspection_storage"] = storage
+        try:
             record = create_inspection_record(
                 farm_id=request.farm_id,
                 inspection_id=inspection_id,
@@ -462,15 +532,20 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
                 storage=storage,
             )
             save_inspection_record(farm_id=request.farm_id, record=record)
-            result["inspection_storage"] = storage
+            result["inspection_history"] = {"stored": True, "status": "saved"}
         except Exception as exc:
-            result["inspection_storage"] = {
+            logger.warning("Inspection history persistence failed: %s", type(exc).__name__)
+            result["inspection_history"] = {
                 "stored": False,
-                "status": "storage_error",
-                "error": str(exc),
+                "status": "persistence_error",
+                "error": type(exc).__name__,
             }
     else:
         result["inspection_storage"] = {
+            "stored": False,
+            "status": "farm_id_required",
+        }
+        result["inspection_history"] = {
             "stored": False,
             "status": "farm_id_required",
         }
