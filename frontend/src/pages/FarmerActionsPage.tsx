@@ -97,12 +97,17 @@ export default function FarmerActionsPage() {
     setReinspectBusy(true);
     try {
       const imageDataUrl = await readFileAsDataUrl(file);
+      const latitude = Number(context.latitude ?? context.lat);
+      const longitude = Number(context.longitude ?? context.lng ?? context.lon);
       const result = await reinspectAfterFeedback({
         action_id: loop.action_id,
         language,
         image_data_url: imageDataUrl,
         previous_risk_score: typeof loop.risk?.score === "number" ? loop.risk.score : null,
         previous_risk_level: loop.risk?.level || null,
+        farm_id: typeof context.farm_id === "string" ? context.farm_id : undefined,
+        latitude: Number.isFinite(latitude) && latitude >= -90 && latitude <= 90 ? latitude : undefined,
+        longitude: Number.isFinite(longitude) && longitude >= -180 && longitude <= 180 ? longitude : undefined,
         farm_context: context,
       });
       const nextLoop = {
