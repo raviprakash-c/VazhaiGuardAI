@@ -1,7 +1,10 @@
 import unittest
 from unittest.mock import MagicMock, patch
 
-from services import inspection_storage
+# Avoid requiring a developer's local AWS SSO profile during unit tests.
+with patch("boto3.Session") as _session_factory:
+    _session_factory.return_value.resource.return_value.Table.return_value = MagicMock()
+    from services import inspection_storage
 
 
 class InspectionStorageTests(unittest.TestCase):
