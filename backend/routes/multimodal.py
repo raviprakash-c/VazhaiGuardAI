@@ -511,6 +511,19 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
                 image_bytes=image_bytes,
                 content_type=content_type,
             )
+        except Exception as exc:
+            logger.warning("Inspection photo storage failed: %s", type(exc).__name__)
+            storage = {
+                "stored": False,
+                "status": "storage_error",
+                "bucket": None,
+                "key": None,
+                "s3_uri": None,
+                "error": type(exc).__name__,
+            }
+
+        result["inspection_storage"] = storage
+        try:
             record = create_inspection_record(
                 farm_id=request.farm_id,
                 inspection_id=inspection_id,
@@ -519,15 +532,20 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
                 storage=storage,
             )
             save_inspection_record(farm_id=request.farm_id, record=record)
-            result["inspection_storage"] = storage
+            result["inspection_history"] = {"stored": True, "status": "saved"}
         except Exception as exc:
-            result["inspection_storage"] = {
+            logger.warning("Inspection history persistence failed: %s", type(exc).__name__)
+            result["inspection_history"] = {
                 "stored": False,
-                "status": "storage_error",
-                "error": str(exc),
+                "status": "persistence_error",
+                "error": type(exc).__name__,
             }
     else:
         result["inspection_storage"] = {
+            "stored": False,
+            "status": "farm_id_required",
+        }
+        result["inspection_history"] = {
             "stored": False,
             "status": "farm_id_required",
         }
