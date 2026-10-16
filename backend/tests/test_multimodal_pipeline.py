@@ -273,5 +273,84 @@ class MultimodalPipelineTests(unittest.TestCase):
         self.assertEqual(result["inspection_history"]["status"], "saved")
 
 
+    def test_inspect_and_decide_returns_complete_evidence_decision_contract(self):
+        """Exercise the full one-call route while isolating external providers."""
+        request = CropInspectionRequest(
+            farm_id="farm-test",
+            image_data_url="data:image/jpeg;base64," + ("a" * 40),
+            language="ta-IN",
+            latitude=9.5,
+            longitude=77.5,
+            farm_context={"crop": "banana", "farmer_confirmed": True},
+            weather_context={"available": True, "risk": "moderate", "source": "Open-Meteo"},
+            satellite_context={"available": True, "provider": "Copernicus", "ndvi": 0.61},
+            soil_context={"available": True, "provider": "ISRIC SoilGrids"},
+        )
+        vision = {
+            "observation": "possible leaf yellowing",
+            "visual_confidence": 0.76,
+            "provider": "ollama-local",
+            "model": "qwen2.5vl:3b",
+            "needs_field_verification": True,
+        }
+        decision = {
+            "summary": "Verify the affected leaves in the field",
+            "priority_actions": [{"priority": 1, "action": "Inspect several plants"}],
+            "follow_up_check": "Check the underside of affected leaves",
+            "recheck_after": "Tomorrow",
+            "needs_field_verification": True,
+            "farmer_message": "பாதிக்கப்பட்ட இலைகளை நேரில் சரிபார்க்கவும்",
+        }
+        risk_result = {
+            "score": 42,
+            "level": "moderate",
+            "signal_scores": {"vision": 42, "weather": 50, "satellite": 39, "soil": 0},
+            "signals_used": ["vision", "weather", "satellite"],
+            "weights_used": {"vision": 0.6, "weather": 0.25, "satellite": 0.15},
+            "evidence_state": {"freshness": {"satellite": "periodic"}},
+        }
+        evaluation = {"needs_field_verification": True, "checks": ["field verification"]}
+        incident = {"actions": [{"priority": 1, "action": "Inspect several plants"}]}
+
+        with patch("routes.multimodal.decode_data_url", return_value=(b"image-bytes", "image/jpeg")), patch(
+            "routes.multimodal.analyze_crop_image", return_value=vision
+        ) as analyze_vision, patch(
+            "routes.multimodal._fuse_signals",
+            return_value=(42.0, "moderate", risk_result["signal_scores"], risk_result["signals_used"], risk_result["weights_used"]),
+        ), patch(
+            "routes.multimodal._generate_farmer_decision", return_value=decision
+        ) as generate_decision, patch(
+            "routes.multimodal.calculate_unified_risk", return_value=risk_result
+        ), patch(
+            "routes.multimodal.evaluate_multimodal_decision", return_value=evaluation
+        ), patch(
+            "routes.multimodal.build_incident_and_action_plan", return_value=incident
+        ), patch(
+            "routes.multimodal.store_photo", return_value={"stored": True, "status": "saved", "key": "demo/photo.jpg"}
+        ), patch(
+            "routes.multimodal.create_inspection_record", return_value={"inspection_id": "record-test"}
+        ), patch("routes.multimodal.save_inspection_record") as save_record:
+            result = inspect_and_decide(request)
+
+        analyze_vision.assert_called_once()
+        self.assertEqual(analyze_vision.call_args.kwargs["language"], "ta-IN")
+        generate_decision.assert_called_once()
+        self.assertEqual(generate_decision.call_args.kwargs["satellite"], request.satellite_context)
+        self.assertEqual(generate_decision.call_args.kwargs["soil"], request.soil_context)
+        self.assertEqual(result["farm_id"], "farm-test")
+        self.assertTrue(result["inspection_id"].startswith("insp_"))
+        self.assertEqual(result["vision"]["model"], "qwen2.5vl:3b")
+        self.assertEqual(result["satellite"]["provider"], "Copernicus")
+        self.assertEqual(result["soil"]["provider"], "ISRIC SoilGrids")
+        self.assertEqual(result["risk"]["score"], 42.0)
+        self.assertEqual(result["risk"]["level"], "moderate")
+        self.assertEqual(result["decision"]["farmer_message"], "பாதிக்கப்பட்ட இலைகளை நேரில் சரிபார்க்கவும்")
+        self.assertEqual(result["evaluation"], evaluation)
+        self.assertEqual(result["incident"], incident)
+        self.assertTrue(result["inspection_storage"]["stored"])
+        self.assertEqual(result["inspection_history"]["status"], "saved")
+        save_record.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
