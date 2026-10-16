@@ -9,6 +9,7 @@ with patch("boto3.Session") as _session_factory:
         _fuse_signals,
         _generate_farmer_decision,
         _resolve_satellite_context,
+        _resolve_soil_context,
     )
 
 
@@ -135,6 +136,87 @@ class MultimodalPipelineTests(unittest.TestCase):
             side_effect=RuntimeError("provider unavailable"),
         ):
             result = _resolve_satellite_context(
+                farm_id="farm-test",
+                latitude=9.05,
+                longitude=78.05,
+                supplied_context=None,
+            )
+        self.assertFalse(result["available"])
+        self.assertEqual(result["status"], "unavailable")
+
+
+    def test_soil_resolver_preserves_explicit_context(self):
+        supplied = {"available": True, "provider": "caller", "properties": {"phh2o": 6.4}}
+        with patch("routes.multimodal.get_farm") as mock_farm, patch(
+            "routes.multimodal.get_soil_evidence"
+        ) as mock_soil:
+            result = _resolve_soil_context(
+                farm_id="farm-test",
+                latitude=9.0,
+                longitude=78.0,
+                supplied_context=supplied,
+            )
+        self.assertIs(result, supplied)
+        mock_farm.assert_not_called()
+        mock_soil.assert_not_called()
+
+    def test_soil_resolver_skips_unconfirmed_farm(self):
+        with patch(
+            "routes.multimodal.get_farm",
+            return_value={"farm_id": "farm-test", "farmer_confirmed": False},
+        ), patch("routes.multimodal.get_soil_evidence") as mock_soil:
+            result = _resolve_soil_context(
+                farm_id="farm-test",
+                latitude=9.0,
+                longitude=78.0,
+                supplied_context=None,
+            )
+        self.assertIsNone(result)
+        mock_soil.assert_not_called()
+
+    def test_soil_resolver_fetches_context_for_confirmed_farm(self):
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [[[78.0, 9.0], [78.1, 9.0], [78.1, 9.1], [78.0, 9.0]]],
+        }
+        expected = {"available": True, "provider": "ISRIC SoilGrids"}
+        with patch(
+            "routes.multimodal.get_farm",
+            return_value={
+                "farm_id": "farm-test",
+                "farmer_confirmed": True,
+                "boundary": boundary,
+            },
+        ), patch(
+            "routes.multimodal.get_soil_evidence",
+            return_value=expected,
+        ) as mock_soil:
+            result = _resolve_soil_context(
+                farm_id="farm-test",
+                latitude=9.05,
+                longitude=78.05,
+                supplied_context=None,
+            )
+        self.assertIs(result, expected)
+        mock_soil.assert_called_once_with(latitude=9.05, longitude=78.05)
+
+    def test_soil_resolver_provider_failure_is_nonfatal(self):
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [[[78.0, 9.0], [78.1, 9.0], [78.1, 9.1], [78.0, 9.0]]],
+        }
+        with patch(
+            "routes.multimodal.get_farm",
+            return_value={
+                "farm_id": "farm-test",
+                "farmer_confirmed": True,
+                "boundary": boundary,
+            },
+        ), patch(
+            "routes.multimodal.get_soil_evidence",
+            side_effect=RuntimeError("provider unavailable"),
+        ):
+            result = _resolve_soil_context(
                 farm_id="farm-test",
                 latitude=9.05,
                 longitude=78.05,
