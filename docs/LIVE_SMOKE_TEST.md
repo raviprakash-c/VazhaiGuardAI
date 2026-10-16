@@ -1,35 +1,66 @@
 # VazhaiGuardAI live smoke test
 
-The runner checks the running API and local Ollama model. It does not print credentials, AWS account identifiers, images, or full model responses.
+This runner records each integration separately as \`PASS\`, \`FAIL\`, \`SKIP\`, or \`DEGRADED\`. Default execution is read-only. Never paste credentials, tokens, private photos, or full model responses into issues or screenshots.
 
-## Read-only checks (default)
+## 1. Read-only API and interface checks
 
 From PowerShell at the repository root:
 
-    Set-Location D:\VazhaiGuardAI
-    python backend\scripts\live_smoke_test.py
+\`\`\`powershell
+Set-Location D:\\VazhaiGuardAI
+python backend\\scripts\\live_smoke_test.py
+\`\`\`
 
-Override endpoints if needed:
+This checks root/health, multimodal/satellite/soil/inspection-storage health interfaces, and whether the configured Qwen2.5-VL model appears in Ollama's model list. It prints explicit \`SKIP\` rows for live inference, evidence retrieval, persistence, history, and reinspection when not requested. An unconfigured provider is \`DEGRADED\`, not a false pass.
 
-    python backend\scripts\live_smoke_test.py --api-base http://127.0.0.1:8000 --ollama-base http://127.0.0.1:11434
+## 2. Actual local Qwen2.5-VL inference
 
-## Optional AWS check
+Use a non-sensitive crop image. This invokes Ollama and consumes local compute:
 
-This calls AWS STS and requires a valid local SSO/profile session:
+\`\`\`powershell
+python backend\\scripts\\live_smoke_test.py --run-local-vision --image "D:\\path\\to\\crop-photo.jpg"
+\`\`\`
 
-    aws sso login --profile vazhaiguard
-    python backend\scripts\live_smoke_test.py --check-aws
+## 3. AWS identity check (optional)
 
-## Optional live weather check
+This calls AWS STS, not Bedrock inference. Refresh the existing SSO profile first if needed:
 
-    python backend\scripts\live_smoke_test.py --weather-lat 9.5003 --weather-lon 77.4999
+\`\`\`powershell
+aws sso login --profile vazhaiguard
+python backend\\scripts\\live_smoke_test.py --check-aws --aws-profile vazhaiguard --aws-region ap-south-1
+\`\`\`
 
-## Optional real inspection — storage writes may occur
+## 4. Live satellite and soil evidence (provider calls)
 
-Only use this when you deliberately want a real inspection. The endpoint can store the photo and inspection history using configured backend services. Use a non-sensitive crop photo and a registered, farmer-confirmed farm ID.
+Only use coordinates and a GeoJSON Polygon exported from the farmer-confirmed farm boundary. The runner validates a closed Polygon ring before sending evidence requests. These requests can incur provider usage/costs.
 
-    python backend\scripts\live_smoke_test.py --run-inspection --image "D:\path\to\crop-photo.jpg" --farm-id "YOUR_CONFIRMED_FARM_ID" --latitude 9.5003 --longitude 77.4999
+\`\`\`powershell
+python backend\\scripts\\live_smoke_test.py --check-evidence --boundary-json "D:\\path\\to\\confirmed-boundary.geojson" --latitude 9.5003 --longitude 77.4999 --confirmed-boundary-checked
+\`\`\`
 
-The command reports a compact result, not the photo or full model output. Successful HTTP response does not establish agronomic accuracy. Satellite data is periodic context; this test does not prove imagery is clipped to the parcel polygon.
+## 5. Read-only inspection history
 
-Exit code 0 means all requested checks passed; 1 means one or more checks failed. The default run is read-only. Never put API keys or tokens on the command line or in screenshots.
+\`\`\`powershell
+python backend\\scripts\\live_smoke_test.py --check-history --farm-id "YOUR_CONFIRMED_FARM_ID"
+\`\`\`
+
+## 6. Real inspection or reinspection (writes may occur)
+
+These endpoints can store photos and append inspection history. Only run them deliberately with a non-sensitive crop image, a registered farm ID, coordinates for the inspection endpoint, and a boundary you have already confirmed in the application. The explicit flag is a safety acknowledgement, not an independent verification of the database.
+
+\`\`\`powershell
+# New inspection: may write photo/history
+python backend\\scripts\\live_smoke_test.py --run-inspection --image "D:\\path\\to\\crop-photo.jpg" --farm-id "YOUR_CONFIRMED_FARM_ID" --latitude 9.5003 --longitude 77.4999 --confirmed-boundary-checked
+
+# Reinspection: may write another photo/history record
+python backend\\scripts\\live_smoke_test.py --run-reinspection --image "D:\\path\\to\\new-crop-photo.jpg" --farm-id "YOUR_CONFIRMED_FARM_ID" --confirmed-boundary-checked
+\`\`\`
+
+## Interpretation
+
+- \`PASS\`: the requested interface returned its expected contract.
+- \`FAIL\`: the requested check could not complete or violated its contract.
+- \`SKIP\`: the check was intentionally not requested.
+- \`DEGRADED\`: an interface responded, but its provider is unconfigured or evidence is unavailable.
+
+Exit code is 1 only when a check is \`FAIL\`. A \`DEGRADED\` or \`SKIP\` still means that part of the end-to-end path is not fully verified. Passing checks do not establish crop-disease accuracy or parcel-level satellite clipping.
