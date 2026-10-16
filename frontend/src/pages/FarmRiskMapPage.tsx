@@ -167,14 +167,30 @@ function readObject<T>(keys: string[]): T | null {
   return null;
 }
 
-function MapRecenter({ center }: { center: LatLngExpression }) {
+function MapRecenter({
+  center,
+  paths,
+}: {
+  center: LatLngExpression;
+  paths: Coordinate[][];
+}) {
   const map = useMap();
 
   useEffect(() => {
+    const boundaryPoints = paths.flat();
+    if (boundaryPoints.length >= 3) {
+      map.fitBounds(boundaryPoints as LatLngBoundsExpression, {
+        padding: [36, 36],
+        maxZoom: 19,
+        animate: true,
+      });
+      return;
+    }
+
     map.setView(center, map.getZoom() < 13 ? 16 : map.getZoom(), {
       animate: true,
     });
-  }, [center, map]);
+  }, [center, map, paths]);
 
   return null;
 }
@@ -721,7 +737,7 @@ export default function FarmRiskMapPage() {
                 />
               )}
 
-              <MapRecenter center={center} />
+              <MapRecenter center={center} paths={paths} />
 
               {showSatellite && currentLayerUrl && (
                 <ImageOverlay

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 
 
 # ============================================================
@@ -162,18 +162,30 @@ async def get_weather(
         "timezone": "auto",
     }
 
-    async with httpx.AsyncClient(
-        timeout=15.0
-    ) as client:
+    try:
+        async with httpx.AsyncClient(timeout=15.0) as client:
+            response = await client.get(
+                OPEN_METEO_URL,
+                params=params,
+            )
+            response.raise_for_status()
+            raw = response.json()
+    except httpx.HTTPError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Live weather is temporarily unavailable. Please try again shortly.",
+        ) from exc
+    except (ValueError, TypeError) as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="The weather provider returned an unreadable response. Please try again shortly.",
+        ) from exc
 
-        response = await client.get(
-            OPEN_METEO_URL,
-            params=params,
+    if not isinstance(raw, dict) or not isinstance(raw.get("current"), dict) or not isinstance(raw.get("hourly"), dict):
+        raise HTTPException(
+            status_code=503,
+            detail="The weather provider returned incomplete data. Please try again shortly.",
         )
-
-        response.raise_for_status()
-
-        raw = response.json()
 
     current = raw.get(
         "current",
