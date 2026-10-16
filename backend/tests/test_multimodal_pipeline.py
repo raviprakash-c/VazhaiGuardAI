@@ -230,7 +230,7 @@ class MultimodalPipelineTests(unittest.TestCase):
     def test_inspection_history_is_saved_when_photo_upload_fails(self):
         request = CropInspectionRequest(
             farm_id="farm-test",
-            image_data_url="data:image/jpeg;base64,aW1hZ2U=",
+            image_data_url="data:image/jpeg;base64," + ("a" * 40),
         )
         risk_result = {
             "score": 20,
