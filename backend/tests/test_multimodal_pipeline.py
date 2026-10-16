@@ -10,6 +10,7 @@ with patch("boto3.Session") as _session_factory:
         _generate_farmer_decision,
         _resolve_satellite_context,
         _resolve_soil_context,
+        inspect_and_decide,
     )
 
 
@@ -224,6 +225,52 @@ class MultimodalPipelineTests(unittest.TestCase):
             )
         self.assertFalse(result["available"])
         self.assertEqual(result["status"], "unavailable")
+
+
+    def test_inspection_history_is_saved_when_photo_upload_fails(self):
+        request = CropInspectionRequest(
+            farm_id="farm-test",
+            image_data_url="data:image/jpeg;base64,aW1hZ2U=",
+        )
+        risk_result = {
+            "score": 20,
+            "level": "low",
+            "signal_scores": {"vision": 20},
+            "signals_used": ["vision"],
+            "weights_used": {"vision": 1.0},
+            "evidence_state": {},
+        }
+        with patch("routes.multimodal.decode_data_url", return_value=(b"image", "image/jpeg")), patch(
+            "routes.multimodal.analyze_crop_image",
+            return_value={"observation": "leaf visible", "visual_confidence": 0.8},
+        ), patch(
+            "routes.multimodal._fuse_signals",
+            return_value=(20.0, "low", {"vision": 20}, ["vision"], {"vision": 1.0}),
+        ), patch(
+            "routes.multimodal._generate_farmer_decision",
+            return_value={"farmer_message": "Check the plant", "priority_actions": []},
+        ), patch(
+            "routes.multimodal.calculate_unified_risk",
+            return_value=risk_result,
+        ), patch(
+            "routes.multimodal.evaluate_multimodal_decision",
+            return_value={"needs_field_verification": True},
+        ), patch(
+            "routes.multimodal.build_incident_and_action_plan",
+            return_value={"actions": []},
+        ), patch(
+            "routes.multimodal.store_photo",
+            side_effect=PermissionError("S3 write denied"),
+        ), patch(
+            "routes.multimodal.create_inspection_record",
+            return_value={"inspection_id": "insp-test"},
+        ), patch("routes.multimodal.save_inspection_record") as save_record:
+            result = inspect_and_decide(request)
+
+        save_record.assert_called_once()
+        self.assertEqual(result["inspection_storage"]["status"], "storage_error")
+        self.assertTrue(result["inspection_history"]["stored"])
+        self.assertEqual(result["inspection_history"]["status"], "saved")
 
 
 if __name__ == "__main__":
