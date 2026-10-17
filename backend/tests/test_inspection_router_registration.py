@@ -6,10 +6,12 @@ from unittest.mock import MagicMock, patch
 class InspectionRouterRegistrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Import/reload the actual backend app while isolating AWS client setup.
-        # Other tests may have imported app.main earlier with mocked modules.
+        # Refresh the router module as well as the app. Reloading only app.main
+        # can retain a stale router object if another test imported it earlier.
         with patch("boto3.Session", return_value=MagicMock()):
+            import routes.inspections as inspections_module
             import app.main as app_module
+            inspections_module = importlib.reload(inspections_module)
             app_module = importlib.reload(app_module)
         cls.app = app_module.app
 
