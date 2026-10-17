@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 # The application currently initializes AWS sessions while importing routers.
 # Stub boto3.Session during app import so these HTTP smoke tests do not require
 # a local AWS profile or credentials, and cannot make live AWS calls.
-with patch("boto3.Session", return_value=MagicMock()), patch("shapely.geometry.shape", return_value=MagicMock()):
+with patch("boto3.Session", return_value=MagicMock()):
     from fastapi.testclient import TestClient
     from app.main import app
 
