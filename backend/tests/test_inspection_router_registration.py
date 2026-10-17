@@ -1,3 +1,4 @@
+import importlib
 import unittest
 from unittest.mock import MagicMock, patch
 
@@ -5,11 +6,12 @@ from unittest.mock import MagicMock, patch
 class InspectionRouterRegistrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Router imports initialize AWS clients in this application. Keep this
-        # regression test isolated from developer profiles and live AWS calls.
+        # Import/reload the actual backend app while isolating AWS client setup.
+        # Other tests may have imported app.main earlier with mocked modules.
         with patch("boto3.Session", return_value=MagicMock()):
-            from app.main import app
-        cls.app = app
+            import app.main as app_module
+            app_module = importlib.reload(app_module)
+        cls.app = app_module.app
 
     def test_inspection_readiness_route_is_registered(self):
         routes = {(route.path, method) for route in self.app.routes
