@@ -1,20 +1,10 @@
-import os
 import unittest
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
-# Importing the application currently initializes AWS clients. Supply dummy
-# credentials and the SDK's default profile during import so these smoke tests
-# remain offline and do not depend on a developer's AWS SSO profile.
-with patch.dict(
-    os.environ,
-    {
-        "AWS_PROFILE": "",
-        "AWS_ACCESS_KEY_ID": "testing",
-        "AWS_SECRET_ACCESS_KEY": "testing",
-        "AWS_DEFAULT_REGION": "ap-south-1",
-        "AWS_EC2_METADATA_DISABLED": "true",
-    },
-):
+# The application currently initializes AWS sessions while importing routers.
+# Stub boto3.Session during app import so these HTTP smoke tests do not require
+# a local AWS profile or credentials, and cannot make live AWS calls.
+with patch("boto3.Session", return_value=MagicMock()):
     from fastapi.testclient import TestClient
     from app.main import app
 
