@@ -1,13 +1,17 @@
-name: Validate VazhaiGuardAI
-
+﻿name: Validate VazhaiGuardAI
 on:
   push:
     branches:
       - prototype-commit13-cdse-farm-layers
+      - vazhaiguard-review-2026-10-17
+      - ci/automated-backend-tests
   pull_request:
     branches:
       - prototype-commit13-cdse-farm-layers
-
+      - vazhaiguard-review-2026-10-17
+      - ci/automated-backend-tests
+permissions:
+  contents: read
 jobs:
   frontend-build:
     runs-on: ubuntu-latest
@@ -23,7 +27,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
-
   backend-syntax:
     runs-on: ubuntu-latest
     steps:
@@ -32,3 +35,18 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m compileall -q backend
+  backend-unit-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - name: Install backend test dependencies
+        run: python -m pip install fastapi boto3 requests pillow python-dotenv python-multipart httpx
+      - name: Run backend unit tests
+        run: python -m unittest discover -s tests -p "test_*.py" -v
