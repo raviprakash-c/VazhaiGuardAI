@@ -159,13 +159,23 @@ def calculate_unified_risk(
     )
 
     # Confidence reflects evidence coverage, not risk severity.
-    coverage = sum(weights_used.values())
+
+    # Confidence reflects evidence coverage, not risk severity.
+    total_adjusted_weight = sum(adjusted.values())
+    coverage = (
+        min(1.0, active_weight / total_adjusted_weight)
+        if total_adjusted_weight > 0
+        else 0.0
+    )
+
     freshness_bonus = 0.0
     if evidence_state["freshness"].get("vision", {}).get("status") == "fresh":
         freshness_bonus += 0.10
     if evidence_state["freshness"].get("weather", {}).get("status") == "fresh":
         freshness_bonus += 0.10
+
     confidence = round(min(1.0, 0.55 * coverage + freshness_bonus), 3)
+
 
     return {
         "score": score,

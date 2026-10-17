@@ -48,6 +48,7 @@ def evaluate_multimodal_decision(
     vision: dict[str, Any] | None,
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
+    soil: dict[str, Any] | None = None,
     risk: dict[str, Any],
     decision: dict[str, Any],
 ) -> dict[str, Any]:
@@ -56,6 +57,7 @@ def evaluate_multimodal_decision(
     checks: dict[str, bool] = {}
     vision = vision or {}
     decision = decision or {}
+    soil = soil or {}
     evidence_state = risk.get("evidence_state") or {}
     conflicts = evidence_state.get("conflicts") or []
 
@@ -127,6 +129,18 @@ def evaluate_multimodal_decision(
             "code": "WEATHER_SIGNAL_MISMATCH",
             "severity": "medium",
             "message": "Risk trace says weather was used without weather evidence.",
+        })
+
+    if "soil" in signals_used and (
+        not soil or soil.get("available") is not True
+            ):
+        issues.append({
+            "code": "SOIL_SIGNAL_MISMATCH",
+            "severity": "high",
+            "message": (
+                "Risk trace says soil was used, "
+                "but usable soil evidence is unavailable."
+            ),
         })
 
     actions = actions if isinstance(actions, list) else []

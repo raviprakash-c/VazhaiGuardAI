@@ -1,5 +1,5 @@
 from pathlib import Path
-
+from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -19,7 +19,8 @@ from routes.multimodal import router as multimodal_router
 from routes.soil import router as soil_router
 from routes.inspections import router as inspections_router
 
-
+_BACKEND_ENV = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_BACKEND_ENV)
 # ------------------------------------------------------------
 # APPLICATION
 # ------------------------------------------------------------

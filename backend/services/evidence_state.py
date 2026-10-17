@@ -38,7 +38,6 @@ def _parse_timestamp(value: Any) -> datetime | None:
 def _age_hours(evidence: dict[str, Any] | None, now: datetime) -> float | None:
     if not evidence:
         return None
-
     timestamp = (
         evidence.get("captured_at")
         or evidence.get("observed_at")
@@ -46,11 +45,18 @@ def _age_hours(evidence: dict[str, Any] | None, now: datetime) -> float | None:
         or evidence.get("updated_at")
     )
     parsed = _parse_timestamp(timestamp)
-    if parsed is None:
-        return None
-
-    return max(0.0, (now - parsed).total_seconds() / 3600.0)
-
+    if parsed is not None:
+        return max(0.0, (now - parsed).total_seconds() / 3600.0)
+    # Use a supplied observation age when no valid timestamp exists.
+    supplied_age = evidence.get("observation_age_hours")
+    if supplied_age is not None:
+        try:
+            age = float(supplied_age)
+            if age >= 0 and age < float("inf"):
+                return age
+        except (TypeError, ValueError, OverflowError):
+            pass
+    return None
 
 
 def _freshness(age_hours: float | None, source: str) -> str:

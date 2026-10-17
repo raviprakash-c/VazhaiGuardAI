@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime, timezone
 from math import isfinite
 from typing import Any, Dict, Literal, Optional
@@ -7,8 +8,10 @@ from pydantic import BaseModel, Field
 
 from routes.multimodal import _fuse_signals, _generate_farmer_decision
 from services.multimodal_service import analyze_crop_image, decode_data_url
+from services.farmer_feedback import build_feedback_event, get_feedback_history, persist_feedback
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/agent", tags=["agent-follow-up"])
 
 
@@ -27,6 +30,7 @@ class ActionFeedbackResponse(BaseModel):
     next_state: str
     farmer_message: str
     recorded_at: str
+    persisted: bool = False
 
 
 class ReinspectionRequest(BaseModel):
@@ -38,6 +42,7 @@ class ReinspectionRequest(BaseModel):
     previous_risk_level: Optional[str] = Field(default=None, max_length=30)
     weather_context: Optional[Dict[str, Any]] = None
     satellite_context: Optional[Dict[str, Any]] = None
+    soil_context: Optional[Dict[str, Any]] = None
     farm_context: Optional[Dict[str, Any]] = None
 
 
@@ -128,18 +133,37 @@ def submit_action_feedback(request: ActionFeedbackRequest):
         "needs_help": "wait_for_farmer",
         "recheck": "capture_photo",
     }
-    language_messages = MESSAGES["ta-IN" if request.language.lower().startswith("ta") else "en-IN"]
-
+    language_messages = MESSAGES[
+        "ta-IN" if request.language.lower().startswith("ta") else "en-IN"
+    ]
+    recorded_at = datetime.now(timezone.utc).isoformat()
+    persisted = False
+    if request.farmer_id:
+        event = build_feedback_event(
+            action_id=request.action_id,
+            outcome=request.outcome,
+            farmer_id=request.farmer_id,
+            language=request.language,
+            note=request.note,
+            recorded_at=recorded_at,
+        )
+        try:
+            persist_feedback(farm_id=request.farmer_id, event=event)
+            persisted = True
+        except Exception as exc:
+            raise HTTPException(
+                status_code=503,
+                detail="Feedback could not be saved to farm history. Please retry.",
+            ) from exc
     return ActionFeedbackResponse(
         success=True,
         action_id=request.action_id,
         outcome=request.outcome,
         next_state=next_states[request.outcome],
         farmer_message=language_messages[request.outcome],
-        recorded_at=datetime.now(timezone.utc).isoformat(),
+        recorded_at=recorded_at,
+        persisted=persisted,
     )
-
-
 @router.post("/reinspect", response_model=ReinspectionResponse)
 def reinspect_after_feedback(request: ReinspectionRequest):
     data_url = _data_url(request)
@@ -159,14 +183,17 @@ def reinspect_after_feedback(request: ReinspectionRequest):
             weather_context=request.weather_context,
         )
         score, label, _signal_scores, signals_used, _weights = _fuse_signals(
-            vision,
-            request.weather_context,
-            request.satellite_context,
+            vision=vision,
+            weather=request.weather_context,
+            satellite=request.satellite_context,
+            soil=request.soil_context,
+            farm_context=request.farm_context,
         )
         decision = _generate_farmer_decision(
             vision=vision,
             weather=request.weather_context,
             satellite=request.satellite_context,
+            soil=request.soil_context,
             farm_context=request.farm_context,
             score=score,
             label=label,
@@ -175,6 +202,7 @@ def reinspect_after_feedback(request: ReinspectionRequest):
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Reinspection failed")
         raise HTTPException(status_code=503, detail="Reinspection is temporarily unavailable. Please try again.") from exc
 
     delta = None if request.previous_risk_score is None else round(score - request.previous_risk_score, 1)
@@ -229,3 +257,16 @@ def feedback_health():
         "states": ["completed", "unable", "needs_help", "recheck"],
         "closed_loop": "feedback -> new photo -> evidence fusion -> risk comparison -> farmer action",
     }
+
+@router.get("/feedback/{farm_id}")
+def action_feedback_history(farm_id: str):
+    try:
+        entries = get_feedback_history(farm_id=farm_id)
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail="Farm was not found.") from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="Feedback history is temporarily unavailable.",
+        ) from exc
+    return {"farm_id": farm_id, "feedback": entries, "count": len(entries)}

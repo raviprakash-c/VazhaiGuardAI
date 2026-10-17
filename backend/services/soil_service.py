@@ -19,11 +19,56 @@ def _number(value: Any) -> float | None:
 
 
 def _extract_mean_uncertainty(payload: dict[str, Any], prop: str) -> tuple[float | None, float | None]:
-    values = payload.get("properties", {}).get(prop)
+    properties = payload.get("properties", {})
+    # Current SoilGrids API response: properties.layers[].depths[].values
+    layers = properties.get("layers") if isinstance(properties, dict) else None
+    if isinstance(layers, list):
+        layer = next(
+            (
+                item for item in layers
+                if isinstance(item, dict) and item.get("name") == prop
+            ),
+            None,
+        )
+        if not isinstance(layer, dict):
+            return None, None
+        depths = layer.get("depths", [])
+        depth_data = next(
+            (
+                item for item in depths
+                if isinstance(item, dict)
+                and item.get("label") == DEPTH
+            ),
+            None,
+        )
+        if not isinstance(depth_data, dict):
+            return None, None
+        values = depth_data.get("values", {})
+        if not isinstance(values, dict):
+            return None, None
+        unit_measure = layer.get("unit_measure", {})
+        factor = _number(
+            unit_measure.get("d_factor")
+            if isinstance(unit_measure, dict)
+            else None
+        ) or 1.0
+        mean = _number(values.get("mean"))
+        uncertainty = _number(values.get("uncertainty"))
+        return (
+            mean / factor if mean is not None else None,
+            uncertainty / factor if uncertainty is not None else None,
+        )
+    # Backward compatibility with the older nested response shape.
+    values = properties.get(prop) if isinstance(properties, dict) else None
     if isinstance(values, dict):
         values = values.get(DEPTH) or values.get("0-30cm") or values
     if isinstance(values, dict):
-        return _number(values.get("mean")), _number(values.get("uncertainty"))
+        mean = _number(values.get("mean"))
+        uncertainty = _number(values.get("uncertainty"))
+        return (
+            mean / 10.0 if mean is not None else None,
+            uncertainty / 10.0 if uncertainty is not None else None,
+        )
     return None, None
 
 
@@ -61,7 +106,14 @@ def get_soil_evidence(*, latitude: float, longitude: float) -> dict[str, Any]:
     params.extend(("property", prop) for prop in PROPERTIES)
 
     try:
-        response = requests.get(SOILGRIDS_URL, params=params, timeout=TIMEOUT)
+        with requests.Session() as session:
+            session.trust_env = False
+            response = session.get(
+                SOILGRIDS_URL,
+                params=params,
+                timeout=(10, max(TIMEOUT, 30)),
+                headers={"User-Agent": "VazhaiGuardAI/1.0"},
+            )
         if response.status_code >= 400:
             return {
                 "available": False, "provider": "ISRIC SoilGrids", "source": "SoilGrids 2.0",
@@ -81,8 +133,10 @@ def get_soil_evidence(*, latitude: float, longitude: float) -> dict[str, Any]:
     uncertainties: dict[str, float | None] = {}
     for prop in PROPERTIES:
         raw, uncertainty = _extract_mean_uncertainty(payload, prop)
-        values[prop] = _normalize(raw, prop)
-        uncertainties[prop] = _normalize(uncertainty, prop)
+        # Values returned by the extractor are already converted using
+        # the SoilGrids layer's d_factor.
+        values[prop] = raw
+        uncertainties[prop] = uncertainty
 
     if not any(value is not None for value in values.values()):
         return {

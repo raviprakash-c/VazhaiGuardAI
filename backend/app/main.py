@@ -1,4 +1,8 @@
-from pathlib import Path
+﻿from pathlib import Path
+from dotenv import load_dotenv
+
+_BACKEND_ENV = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_BACKEND_ENV)
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +13,7 @@ from parcel import router as parcel_router
 from routes.zone import router as zone_router
 from routes.bedrock import router as bedrock_router
 from routes.multimodal import router as multimodal_router
+from routes.inspections import router as inspections_router
 from routes.evidence import router as evidence_router
 from routes.followup import router as followup_router
 from routes.satellite import router as satellite_router
@@ -48,6 +53,7 @@ app.include_router(farm_map_router)
 app.include_router(weather_router)
 app.include_router(bedrock_router)
 app.include_router(multimodal_router)
+app.include_router(inspections_router)
 app.include_router(evidence_router)
 app.include_router(satellite_router)
 app.include_router(soil_router)

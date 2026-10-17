@@ -17,6 +17,35 @@ def _severity_rank(value: Any) -> int:
     return {"low": 0, "moderate": 1, "high": 2}.get(str(value).lower(), 0)
 
 
+def _safe_float(value: Any, default: float = 0.0) -> float:
+    """Parse optional weather numbers without letting missing provider data crash planning."""
+    if value is None or isinstance(value, bool):
+        return default
+    try:
+        parsed = float(value)
+    except (TypeError, ValueError, OverflowError):
+        return default
+    return parsed if parsed == parsed and abs(parsed) != float("inf") else default
+
+
+def _latest_record(history: list[dict[str, Any]]) -> dict[str, Any]:
+    """Choose the newest timestamped record regardless of input ordering.
+
+    Some older records have no timestamp; if no usable timestamps exist, preserve
+    the API's established convention that the final record is the newest.
+    """
+    timestamped = [
+        (parsed, record)
+        for record in history
+        if isinstance(record, dict)
+        for parsed in [_parse_iso(record.get("created_at"))]
+        if parsed is not None
+    ]
+    if not timestamped:
+        return history[-1]
+    return max(timestamped, key=lambda item: item[0])[1]
+
+
 def plan_next_inspection(
     *,
     history: list[dict[str, Any]],
@@ -35,7 +64,7 @@ def plan_next_inspection(
             "engine": "agentic-reinspection-v1",
         }
 
-    latest = history[-1]
+    latest = _latest_record(history)
     incident = latest.get("incident") or {}
     evaluation = latest.get("evaluation") or {}
     comparison = latest.get("comparison") or {}
@@ -85,8 +114,8 @@ def plan_next_inspection(
 
     weather = current_weather or {}
     next24 = weather.get("next_24_hours") or {}
-    rain = float(next24.get("max_rain_probability") or 0)
-    gust = float(next24.get("max_wind_gust") or 0)
+    rain = _safe_float(next24.get("max_rain_probability"))
+    gust = _safe_float(next24.get("max_wind_gust"))
     if rain >= 80 or gust >= 45:
         peak = next24.get("peak_rain_time") or next24.get("peak_gust_time")
         when = "After the heavy rain / strong wind passes"

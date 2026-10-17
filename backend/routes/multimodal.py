@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 import time
 import uuid
@@ -9,10 +10,16 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from services.bedrock_service import extract_json, generate_text
+
+from services.dynamodb_service import get_farm
+from services.satellite_service import analyze_satellite_evidence
 from services.multimodal_service import (
+    LOCAL_VISION_ENABLED,
+    LOCAL_VISION_MODEL,
     PRIMARY_VISION_MODEL,
     SECONDARY_VISION_MODEL,
     analyze_crop_image,
+    check_ollama_reachable,
     decode_data_url,
 )
 from services.unified_risk_engine import calculate_unified_risk
@@ -23,6 +30,7 @@ from services.soil_service import get_soil_evidence
 
 router = APIRouter(prefix="/ai/multimodal", tags=["multimodal-ai"])
 TEXT_MODEL_ID = os.getenv("VAZHAIGUARD_TEXT_MODEL", "mistral.ministral-3-8b-instruct")
+logger = logging.getLogger(__name__)
 
 
 class CropInspectionRequest(BaseModel):
@@ -34,6 +42,8 @@ class CropInspectionRequest(BaseModel):
     satellite_context: dict[str, Any] | None = None
     soil_context: dict[str, Any] | None = None
     zone_id: str | None = Field(default=None, max_length=80)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
 
 
 class RiskFusionRequest(BaseModel):
@@ -154,7 +164,8 @@ def _generate_farmer_decision(
     vision: dict[str, Any],
     weather: dict[str, Any] | None,
     satellite: dict[str, Any] | None,
-    farm_context: dict[str, Any] | None,
+    soil: dict[str, Any] | None = None,
+    farm_context: dict[str, Any] | None = None,
     score: float,
     label: str,
     language: str,
@@ -196,13 +207,20 @@ def _generate_farmer_decision(
 
 @router.get("/health")
 def multimodal_health() -> dict[str, Any]:
+    ollama_ok = check_ollama_reachable(timeout_seconds=0.5) if LOCAL_VISION_ENABLED else False
     return {
         "service": "VazhaiGuard multimodal inspection",
         "primary_vision_model": PRIMARY_VISION_MODEL,
         "fallback_vision_model": SECONDARY_VISION_MODEL,
+        "local_vision_model": LOCAL_VISION_MODEL,
+        "local_vision_enabled": LOCAL_VISION_ENABLED,
         "decision_model": TEXT_MODEL_ID,
-        "fusion": "vision + weather + optional satellite + farm context + freshness/conflict rules",
+        "fusion": "vision + weather + optional satellite + soil + farm context + freshness/conflict rules",
         "status": "configured",
+        "reachability": {
+            "local_ollama": ollama_ok,
+            "cloud_bedrock": "configured",
+        },
     }
 
 
@@ -221,37 +239,45 @@ def inspect_crop(request: CropInspectionRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Multimodal vision inspection failed")
         raise HTTPException(status_code=503, detail="Multimodal inspection is temporarily unavailable.") from exc
     return {
         "zone_id": request.zone_id,
         "vision": vision,
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "source": "AWS Bedrock multimodal",
+        "source": f"{vision.get('provider', 'unknown')} vision",
     }
 
 
 @router.post("/risk-fusion")
 def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
-        request.vision, request.weather, request.satellite, request.farm_context
+        vision=request.vision,
+        weather=request.weather,
+        satellite=request.satellite,
+        soil=request.soil,
+        farm_context=request.farm_context,
     )
     try:
         decision = _generate_farmer_decision(
             vision=request.vision,
             weather=request.weather,
             satellite=request.satellite,
+            soil=request.soil,
             farm_context=request.farm_context,
             score=score,
             label=label,
             language=request.language,
         )
     except Exception as exc:
+        logger.exception("Farmer decision generation failed")
         raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
 
     risk_result = calculate_unified_risk(
         vision=request.vision,
         weather=request.weather,
         satellite=request.satellite,
+        soil=request.soil,
         farm_context=request.farm_context,
     )
     risk = {
@@ -265,6 +291,7 @@ def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
         vision=request.vision,
         weather=request.weather,
         satellite=request.satellite,
+        soil=request.soil,
         risk=risk,
         decision=decision,
     )
@@ -295,27 +322,53 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as exc:
+        logger.exception("Multimodal vision inspection failed")
         raise HTTPException(status_code=503, detail="Multimodal inspection is temporarily unavailable.") from exc
 
+    # Preserve explicit soil evidence; otherwise acquire coarse SoilGrids
+    # context only when the caller provides farm coordinates.
+    soil_context = request.soil_context
+    if (
+        soil_context is None
+        and request.latitude is not None
+        and request.longitude is not None
+    ):
+        try:
+            soil_context = get_soil_evidence(
+                latitude=request.latitude,
+                longitude=request.longitude,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Soil evidence acquisition failed; continuing without it: %s",
+                type(exc).__name__,
+            )
+            soil_context = {
+                "available": False,
+                "status": "unavailable",
+                "scope": "coarse_soil_context",
+                "reason": "Soil evidence acquisition failed.",
+            }
     score, label, signal_scores, signals_used, weights_used = _fuse_signals(
-        vision,
-        request.weather_context,
-        request.satellite_context,
-        request.soil_context,
-        request.farm_context,
+        vision=vision,
+        weather=request.weather_context,
+        satellite=request.satellite_context,
+        soil=soil_context,
+        farm_context=request.farm_context,
     )
     try:
         decision = _generate_farmer_decision(
             vision=vision,
             weather=request.weather_context,
             satellite=request.satellite_context,
-            soil=request.soil_context,
+            soil=soil_context,
             farm_context=request.farm_context,
             score=score,
             label=label,
             language=request.language,
         )
     except Exception as exc:
+        logger.exception("Farmer decision generation failed")
         raise HTTPException(status_code=503, detail="Decision model is temporarily unavailable.") from exc
 
     risk = {
@@ -327,6 +380,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
             vision=vision,
             weather=request.weather_context,
             satellite=request.satellite_context,
+            soil=soil_context,
             farm_context=request.farm_context,
         ).get("evidence_state", {}),
     }
@@ -334,7 +388,7 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         vision=vision,
         weather=request.weather_context,
         satellite=request.satellite_context,
-        soil=request.soil_context,
+        soil=soil_context,
         risk=risk,
         decision=decision,
     )
@@ -362,7 +416,10 @@ def inspect_and_decide(request: InspectAndDecideRequest) -> dict[str, Any]:
         "incident": incident,
         "action_plan": incident,
         "latency_ms": round((time.perf_counter() - started) * 1000),
-        "source": "AWS Bedrock multimodal + deterministic evidence fusion + incident/action engine",
+      "source": (
+    f"{vision.get('provider', 'unknown')} vision"
+    " + deterministic evidence fusion + incident/action engine"
+),
     }
 
     if request.farm_id:

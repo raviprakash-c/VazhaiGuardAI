@@ -2932,5 +2932,443 @@
       "confidence": 0.95,
       "source_file": "Park_Cadastral_Map.geojson"
     }
+  },
+  {
+    "farm_id": "farm_33bf1cea70",
+    "farm_profile": {
+      "farm_name": "தங்கராஜ் தோட்டம்",
+      "total_farm_acres": 5,
+      "banana_area_acres": 3,
+      "banana_variety": "Nendran",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.781122887200246,
+      "longitude": 78.02699301194967,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "MultiPolygon",
+      "coordinates": [
+        [
+          [
+            [
+              78.02671433126403,
+              8.782647763930264,
+              0
+            ],
+            [
+              78.02716250331136,
+              8.782317333755364,
+              0
+            ],
+            [
+              78.02711524096063,
+              8.782189656596604,
+              0
+            ],
+            [
+              78.02702006321587,
+              8.7819325373938,
+              0
+            ],
+            [
+              78.02731049610959,
+              8.781639921756442,
+              0
+            ],
+            [
+              78.0277781186307,
+              8.78115519241958,
+              0
+            ],
+            [
+              78.02801569819215,
+              8.780891270500483,
+              0
+            ],
+            [
+              78.0279155857408,
+              8.780697245741171,
+              0
+            ],
+            [
+              78.02758938766654,
+              8.780042930200329,
+              0
+            ],
+            [
+              78.0273782569106,
+              8.779604036203045,
+              0
+            ],
+            [
+              78.02711239316089,
+              8.779351896531566,
+              0
+            ],
+            [
+              78.02675983525926,
+              8.778956128744884,
+              0
+            ],
+            [
+              78.02673987854233,
+              8.77893588459219,
+              0
+            ],
+            [
+              78.0264176626744,
+              8.780080870452295,
+              0
+            ],
+            [
+              78.02668120824286,
+              8.780990764925972,
+              0
+            ],
+            [
+              78.02635886350762,
+              8.781548837637082,
+              0
+            ],
+            [
+              78.02640262422617,
+              8.781683848164725,
+              0
+            ],
+            [
+              78.0262187657176,
+              8.782297311571021,
+              0
+            ],
+            [
+              78.02645499439618,
+              8.78284654895784,
+              0
+            ],
+            [
+              78.02671433126403,
+              8.782647763930264,
+              0
+            ]
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 10.3735,
+    "perimeter_m": 1026.14,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.85,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
+  },
+  {
+    "farm_id": "farm_8fb3ef78aa",
+    "farm_profile": {
+      "farm_name": "தங்கராஜ் தோட்டம்",
+      "total_farm_acres": 5,
+      "banana_area_acres": 3,
+      "banana_variety": "Nendran",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.781122887200246,
+      "longitude": 78.02699301194967,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "MultiPolygon",
+      "coordinates": [
+        [
+          [
+            [
+              78.02671433126403,
+              8.782647763930264,
+              0
+            ],
+            [
+              78.02716250331136,
+              8.782317333755364,
+              0
+            ],
+            [
+              78.02711524096063,
+              8.782189656596604,
+              0
+            ],
+            [
+              78.02702006321587,
+              8.7819325373938,
+              0
+            ],
+            [
+              78.02731049610959,
+              8.781639921756442,
+              0
+            ],
+            [
+              78.0277781186307,
+              8.78115519241958,
+              0
+            ],
+            [
+              78.02801569819215,
+              8.780891270500483,
+              0
+            ],
+            [
+              78.0279155857408,
+              8.780697245741171,
+              0
+            ],
+            [
+              78.02758938766654,
+              8.780042930200329,
+              0
+            ],
+            [
+              78.0273782569106,
+              8.779604036203045,
+              0
+            ],
+            [
+              78.02711239316089,
+              8.779351896531566,
+              0
+            ],
+            [
+              78.02675983525926,
+              8.778956128744884,
+              0
+            ],
+            [
+              78.02673987854233,
+              8.77893588459219,
+              0
+            ],
+            [
+              78.0264176626744,
+              8.780080870452295,
+              0
+            ],
+            [
+              78.02668120824286,
+              8.780990764925972,
+              0
+            ],
+            [
+              78.02635886350762,
+              8.781548837637082,
+              0
+            ],
+            [
+              78.02640262422617,
+              8.781683848164725,
+              0
+            ],
+            [
+              78.0262187657176,
+              8.782297311571021,
+              0
+            ],
+            [
+              78.02645499439618,
+              8.78284654895784,
+              0
+            ],
+            [
+              78.02671433126403,
+              8.782647763930264,
+              0
+            ]
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 10.3735,
+    "perimeter_m": 1026.14,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.85,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
+  },
+  {
+    "farm_id": "farm_26d416cf3e",
+    "farm_profile": {
+      "farm_name": "பள்ளி தோட்டம்",
+      "total_farm_acres": 5,
+      "banana_area_acres": 3,
+      "banana_variety": "Poovan",
+      "planting_age": "8 months",
+      "approximate_plants": 5500,
+      "drainage": "poor",
+      "support": "low",
+      "accessibility": "easy"
+    },
+    "location": {
+      "latitude": 8.781122887200246,
+      "longitude": 78.02699301194967,
+      "label": "Farmer confirmed cadastral farm parcel"
+    },
+    "boundary": {
+      "type": "MultiPolygon",
+      "coordinates": [
+        [
+          [
+            [
+              78.02671433126403,
+              8.782647763930264,
+              0
+            ],
+            [
+              78.02716250331136,
+              8.782317333755364,
+              0
+            ],
+            [
+              78.02711524096063,
+              8.782189656596604,
+              0
+            ],
+            [
+              78.02702006321587,
+              8.7819325373938,
+              0
+            ],
+            [
+              78.02731049610959,
+              8.781639921756442,
+              0
+            ],
+            [
+              78.0277781186307,
+              8.78115519241958,
+              0
+            ],
+            [
+              78.02801569819215,
+              8.780891270500483,
+              0
+            ],
+            [
+              78.0279155857408,
+              8.780697245741171,
+              0
+            ],
+            [
+              78.02758938766654,
+              8.780042930200329,
+              0
+            ],
+            [
+              78.0273782569106,
+              8.779604036203045,
+              0
+            ],
+            [
+              78.02711239316089,
+              8.779351896531566,
+              0
+            ],
+            [
+              78.02675983525926,
+              8.778956128744884,
+              0
+            ],
+            [
+              78.02673987854233,
+              8.77893588459219,
+              0
+            ],
+            [
+              78.0264176626744,
+              8.780080870452295,
+              0
+            ],
+            [
+              78.02668120824286,
+              8.780990764925972,
+              0
+            ],
+            [
+              78.02635886350762,
+              8.781548837637082,
+              0
+            ],
+            [
+              78.02640262422617,
+              8.781683848164725,
+              0
+            ],
+            [
+              78.0262187657176,
+              8.782297311571021,
+              0
+            ],
+            [
+              78.02645499439618,
+              8.78284654895784,
+              0
+            ],
+            [
+              78.02671433126403,
+              8.782647763930264,
+              0
+            ]
+          ]
+        ]
+      ]
+    },
+    "mapped_area_acres": 10.3735,
+    "perimeter_m": 1026.14,
+    "farmer_confirmed": true,
+    "boundary_source": "cadastral_edited",
+    "parcel_id": "Park_Cadastral_Map.geojson:6:2:384:None",
+    "parcel_metadata": {
+      "district": "Thoothukudi",
+      "taluk": "Thoothukudi",
+      "village": "Keelathattaparai",
+      "survey_number": "384",
+      "subdivision": null,
+      "land_id": null,
+      "unit_id": "6",
+      "block_id": "2",
+      "kide": null,
+      "confidence": 0.95,
+      "source_file": "Park_Cadastral_Map.geojson"
+    }
   }
 ]
