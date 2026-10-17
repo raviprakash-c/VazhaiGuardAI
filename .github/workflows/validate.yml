@@ -1,15 +1,17 @@
-﻿name: Validate VazhaiGuardAI
+name: Validate VazhaiGuardAI
 on:
   push:
     branches:
       - prototype-commit13-cdse-farm-layers
       - vazhaiguard-review-2026-10-17
       - ci/automated-backend-tests
+      - test/automated-api-smoke
   pull_request:
     branches:
       - prototype-commit13-cdse-farm-layers
       - vazhaiguard-review-2026-10-17
       - ci/automated-backend-tests
+      - test/automated-api-smoke
 permissions:
   contents: read
 jobs:
