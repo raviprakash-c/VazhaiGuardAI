@@ -36,7 +36,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: python -m pip install --upgrade pip
-      - run: python -m pip install boto3 fastapi httpx pydantic requests python-dotenv pytest
+      - run: python -m pip install boto3 fastapi httpx pydantic requests python-dotenv pytest shapely
       - run: python -m compileall -q backend
       - run: python -m unittest discover -s tests -p "test_*.py" -v
         working-directory: backend
