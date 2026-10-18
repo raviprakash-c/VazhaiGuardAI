@@ -50,6 +50,7 @@ app.include_router(weather_router)
 app.include_router(bedrock_router)
 app.include_router(multimodal_router)
 app.include_router(evidence_router)
+app.include_router(inspections_router)
 app.include_router(satellite_router)
 app.include_router(soil_router)
 
@@ -61,9 +62,3 @@ def root():
 def health():
     return {"status":"healthy","service":"VazhaiGuardAI","bedrock_text_model":"mistral.ministral-3-8b-instruct","multimodal":"enabled","evidence_monitor":"enabled","satellite_evidence":"copernicus-cdse","agentic_follow_up":"enabled"}
 
-# Ensure the inspection router is mounted after the application routes are
-# declared. This also protects the app from partial router initialization
-# during complex import sequences without registering the same paths twice.
-_registered_paths = {route.path for route in app.routes}
-if any(route.path not in _registered_paths for route in inspections_router.routes):
-    app.include_router(inspections_router)
