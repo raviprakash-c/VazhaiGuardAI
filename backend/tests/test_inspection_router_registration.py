@@ -8,22 +8,28 @@ from pathlib import Path
 class InspectionRouterRegistrationTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        # Import the application in a clean interpreter. Reloading app/router
-        # modules in the unittest process can leave previously imported routers
-        # attached to other module instances, making the test depend on order.
+        # Use a fresh interpreter so imports made by unrelated tests cannot
+        # contaminate the application/router module identities.
         backend_dir = Path(__file__).resolve().parents[1]
         script = r"""
+import importlib
 import json
 from unittest.mock import MagicMock, patch
 
 with patch("boto3.Session", return_value=MagicMock()):
-    from app.main import app
+    app_module = importlib.import_module("app.main")
+    inspections_module = importlib.import_module("routes.inspections")
 
-print(json.dumps([
-    (route.path, method)
-    for route in app.routes
-    for method in getattr(route, "methods", set())
-]))
+print(json.dumps({
+    "app_file": app_module.__file__,
+    "inspection_file": inspections_module.__file__,
+    "inspection_router_paths": [route.path for route in inspections_module.router.routes],
+    "routes": [
+        (route.path, method)
+        for route in app_module.app.routes
+        for method in getattr(route, "methods", set())
+    ],
+}))
 """
         result = subprocess.run(
             [sys.executable, "-c", script],
@@ -33,20 +39,42 @@ print(json.dumps([
             text=True,
             timeout=30,
         )
-        cls.routes = {tuple(route) for route in json.loads(result.stdout)}
+        payload = json.loads(result.stdout)
+        cls.routes = {tuple(route) for route in payload["routes"]}
+        cls.import_diagnostics = payload
 
     def test_inspection_readiness_route_is_registered(self):
-        self.assertIn(("/ai/inspections/health", "GET"), self.routes)
+        self.assertIn(
+            ("/ai/inspections/health", "GET"),
+            self.routes,
+            msg=f"App/router import diagnostics: {self.import_diagnostics}",
+        )
 
     def test_inspection_history_route_is_registered(self):
-        self.assertIn(("/ai/inspections/{farm_id}/history", "GET"), self.routes)
+        self.assertIn(
+            ("/ai/inspections/{farm_id}/history", "GET"),
+            self.routes,
+            msg=f"App/router import diagnostics: {self.import_diagnostics}",
+        )
 
     def test_reinspection_route_is_registered(self):
-        self.assertIn(("/ai/inspections/reinspect", "POST"), self.routes)
+        self.assertIn(
+            ("/ai/inspections/reinspect", "POST"),
+            self.routes,
+            msg=f"App/router import diagnostics: {self.import_diagnostics}",
+        )
 
     def test_timeline_and_next_action_routes_are_registered(self):
-        self.assertIn(("/ai/inspections/{farm_id}/timeline", "GET"), self.routes)
-        self.assertIn(("/ai/inspections/{farm_id}/next-action", "GET"), self.routes)
+        self.assertIn(
+            ("/ai/inspections/{farm_id}/timeline", "GET"),
+            self.routes,
+            msg=f"App/router import diagnostics: {self.import_diagnostics}",
+        )
+        self.assertIn(
+            ("/ai/inspections/{farm_id}/next-action", "GET"),
+            self.routes,
+            msg=f"App/router import diagnostics: {self.import_diagnostics}",
+        )
 
 
 if __name__ == "__main__":
