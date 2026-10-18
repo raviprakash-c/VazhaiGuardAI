@@ -11,6 +11,7 @@ from routes.bedrock import router as bedrock_router
 from routes.multimodal import router as multimodal_router
 from routes.evidence import router as evidence_router
 from routes.followup import router as followup_router
+from routes.inspections import router as inspections_router
 from routes.satellite import router as satellite_router
 from routes.soil import router as soil_router
 from voice_registration import router as voice_registration_router
@@ -49,6 +50,7 @@ app.include_router(weather_router)
 app.include_router(bedrock_router)
 app.include_router(multimodal_router)
 app.include_router(evidence_router)
+app.include_router(inspections_router)
 app.include_router(satellite_router)
 app.include_router(soil_router)
 
@@ -59,3 +61,4 @@ def root():
 @app.get("/health")
 def health():
     return {"status":"healthy","service":"VazhaiGuardAI","bedrock_text_model":"mistral.ministral-3-8b-instruct","multimodal":"enabled","evidence_monitor":"enabled","satellite_evidence":"copernicus-cdse","agentic_follow_up":"enabled"}
+
