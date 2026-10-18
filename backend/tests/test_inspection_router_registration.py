@@ -38,11 +38,13 @@ print(json.dumps({
         result = subprocess.run(
             [sys.executable, "-c", script],
             cwd=backend_dir,
-            check=True,
+            check=False,
             capture_output=True,
             text=True,
             timeout=30,
         )
+        if result.returncode != 0:
+            raise AssertionError(f"Fresh app import failed. stdout={result.stdout!r}; stderr={result.stderr!r}")
         payload = json.loads(result.stdout)
         cls.routes = {tuple(route) for route in payload["routes"]}
         cls.import_diagnostics = payload
