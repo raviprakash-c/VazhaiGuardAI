@@ -29,9 +29,10 @@ print(json.dumps({
     "module_router_paths": [route.path for route in module_router.routes],
     "same_router_object": app_router is module_router,
     "routes": [
-        (route.path, method)
-        for route in app_module.app.routes
-        for method in getattr(route, "methods", set())
+        (path, method.upper())
+        for path, operations in app_module.app.openapi()["paths"].items()
+        for method in operations
+        if method.lower() in {"get", "post", "put", "patch", "delete", "options", "head"}
     ],
 }))
 """
