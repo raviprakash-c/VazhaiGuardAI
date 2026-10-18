@@ -20,10 +20,14 @@ with patch("boto3.Session", return_value=MagicMock()):
     app_module = importlib.import_module("app.main")
     inspections_module = importlib.import_module("routes.inspections")
 
+app_router = app_module.inspections_router
+module_router = inspections_module.router
 print(json.dumps({
     "app_file": app_module.__file__,
     "inspection_file": inspections_module.__file__,
-    "inspection_router_paths": [route.path for route in inspections_module.router.routes],
+    "app_router_paths": [route.path for route in app_router.routes],
+    "module_router_paths": [route.path for route in module_router.routes],
+    "same_router_object": app_router is module_router,
     "routes": [
         (route.path, method)
         for route in app_module.app.routes
@@ -44,37 +48,22 @@ print(json.dumps({
         cls.import_diagnostics = payload
 
     def test_inspection_readiness_route_is_registered(self):
-        self.assertIn(
-            ("/ai/inspections/health", "GET"),
-            self.routes,
-            msg=f"App/router import diagnostics: {self.import_diagnostics}",
-        )
+        self.assertIn(("/ai/inspections/health", "GET"), self.routes,
+                      msg=f"App/router import diagnostics: {self.import_diagnostics}")
 
     def test_inspection_history_route_is_registered(self):
-        self.assertIn(
-            ("/ai/inspections/{farm_id}/history", "GET"),
-            self.routes,
-            msg=f"App/router import diagnostics: {self.import_diagnostics}",
-        )
+        self.assertIn(("/ai/inspections/{farm_id}/history", "GET"), self.routes,
+                      msg=f"App/router import diagnostics: {self.import_diagnostics}")
 
     def test_reinspection_route_is_registered(self):
-        self.assertIn(
-            ("/ai/inspections/reinspect", "POST"),
-            self.routes,
-            msg=f"App/router import diagnostics: {self.import_diagnostics}",
-        )
+        self.assertIn(("/ai/inspections/reinspect", "POST"), self.routes,
+                      msg=f"App/router import diagnostics: {self.import_diagnostics}")
 
     def test_timeline_and_next_action_routes_are_registered(self):
-        self.assertIn(
-            ("/ai/inspections/{farm_id}/timeline", "GET"),
-            self.routes,
-            msg=f"App/router import diagnostics: {self.import_diagnostics}",
-        )
-        self.assertIn(
-            ("/ai/inspections/{farm_id}/next-action", "GET"),
-            self.routes,
-            msg=f"App/router import diagnostics: {self.import_diagnostics}",
-        )
+        self.assertIn(("/ai/inspections/{farm_id}/timeline", "GET"), self.routes,
+                      msg=f"App/router import diagnostics: {self.import_diagnostics}")
+        self.assertIn(("/ai/inspections/{farm_id}/next-action", "GET"), self.routes,
+                      msg=f"App/router import diagnostics: {self.import_diagnostics}")
 
 
 if __name__ == "__main__":
