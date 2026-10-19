@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse
 import base64
 import json
+import math
 import mimetypes
 import os
 import sys
@@ -187,6 +188,7 @@ def run_inspection(api_base: str, image_path: Path, farm_id: str,
 
 
 def validate_boundary(path: Path) -> dict[str, Any]:
+    """Validate GeoJSON Polygon coordinates before sending them to evidence providers."""
     try:
         boundary = json.loads(path.read_text(encoding="utf-8"))
     except Exception as exc:
@@ -194,11 +196,29 @@ def validate_boundary(path: Path) -> dict[str, Any]:
     if not isinstance(boundary, dict) or boundary.get("type") != "Polygon":
         raise ValueError("boundary must be a GeoJSON Polygon object")
     coordinates = boundary.get("coordinates")
-    if not isinstance(coordinates, list) or not coordinates or not isinstance(coordinates[0], list) or len(coordinates[0]) < 4:
-        raise ValueError("Polygon must contain a closed exterior ring with at least four positions")
-    ring = coordinates[0]
-    if ring[0] != ring[-1]:
-        raise ValueError("Polygon exterior ring must be closed (first and last positions equal)")
+    if not isinstance(coordinates, list) or not coordinates:
+        raise ValueError("Polygon must contain an exterior ring")
+    for ring_index, ring in enumerate(coordinates):
+        ring_label = "exterior ring" if ring_index == 0 else f"interior ring {ring_index}"
+        if not isinstance(ring, list) or len(ring) < 4:
+            raise ValueError(f"Polygon {ring_label} must contain at least four positions")
+        for position in ring:
+            if not isinstance(position, list) or len(position) < 2:
+                raise ValueError(f"Polygon {ring_label} contains an invalid coordinate position")
+            longitude, latitude = position[0], position[1]
+            if (
+                isinstance(longitude, bool)
+                or isinstance(latitude, bool)
+                or not isinstance(longitude, (int, float))
+                or not isinstance(latitude, (int, float))
+                or not math.isfinite(longitude)
+                or not math.isfinite(latitude)
+            ):
+                raise ValueError(f"Polygon {ring_label} coordinates must be finite numbers")
+            if not -180 <= longitude <= 180 or not -90 <= latitude <= 90:
+                raise ValueError(f"Polygon {ring_label} coordinates are outside longitude/latitude ranges")
+        if ring[0] != ring[-1]:
+            raise ValueError(f"Polygon {ring_label} must be closed (first and last positions equal)")
     return boundary
 
 
