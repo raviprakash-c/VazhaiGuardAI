@@ -283,6 +283,14 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         parser.error("--weather-lat and --weather-lon must be provided together")
     if (args.latitude is None) != (args.longitude is None):
         parser.error("--latitude and --longitude must be provided together")
+    for label, latitude, longitude in (
+        ("weather", args.weather_lat, args.weather_lon),
+        ("inspection/evidence", args.latitude, args.longitude),
+    ):
+        if latitude is not None and not -90 <= latitude <= 90:
+            parser.error(f"{label} latitude must be between -90 and 90")
+        if longitude is not None and not -180 <= longitude <= 180:
+            parser.error(f"{label} longitude must be between -180 and 180")
     if args.check_evidence and not (args.boundary_json and args.latitude is not None and args.longitude is not None and args.confirmed_boundary_checked):
         parser.error("--check-evidence requires --boundary-json, --latitude, --longitude, and --confirmed-boundary-checked")
     if args.run_local_vision and not args.image:

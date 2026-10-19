@@ -145,6 +145,19 @@ class SmokeTestHelpers(unittest.TestCase):
             args = smoke.parse_args()
         self.assertTrue(args.check_history)
 
+    def test_evidence_coordinates_must_be_in_geographic_ranges(self):
+        with patch("sys.argv", ["live_smoke_test.py", "--check-evidence", "--boundary-json", "boundary.json",
+                                "--latitude", "91", "--longitude", "77", "--confirmed-boundary-checked"]):
+            with self.assertRaises(SystemExit) as error:
+                smoke.parse_args()
+        self.assertEqual(error.exception.code, 2)
+
+    def test_weather_longitude_must_be_in_geographic_range(self):
+        with patch("sys.argv", ["live_smoke_test.py", "--weather-lat", "9.5", "--weather-lon", "181"]):
+            with self.assertRaises(SystemExit) as error:
+                smoke.parse_args()
+        self.assertEqual(error.exception.code, 2)
+
 
 if __name__ == "__main__":
     unittest.main()
