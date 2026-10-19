@@ -22,7 +22,8 @@ AWS_REGION = os.getenv(
 )
 
 AWS_PROFILE = os.getenv(
-    "AWS_PROFILE"
+    "AWS_PROFILE",
+    "vazhaiguard",
 )
 
 VOICE_MODEL_ID = os.getenv(
