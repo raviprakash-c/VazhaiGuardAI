@@ -79,6 +79,33 @@ class SmokeTestHelpers(unittest.TestCase):
             with self.assertRaises(ValueError):
                 smoke.validate_boundary(path)
 
+    def test_boundary_rejects_out_of_range_coordinates(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "boundary.json"
+            path.write_text(json.dumps({"type": "Polygon", "coordinates": [[[181, 2], [2, 2], [2, 3], [181, 2]]]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "outside longitude/latitude ranges"):
+                smoke.validate_boundary(path)
+
+    def test_boundary_rejects_non_finite_and_boolean_coordinates(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "boundary.json"
+            path.write_text('{"type":"Polygon","coordinates":[[[NaN,2],[2,2],[2,3],[NaN,2]]]}', encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "finite numbers"):
+                smoke.validate_boundary(path)
+            path.write_text(json.dumps({"type": "Polygon", "coordinates": [[[True, 2], [2, 2], [2, 3], [True, 2]]]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "finite numbers"):
+                smoke.validate_boundary(path)
+
+    def test_boundary_validates_all_polygon_rings(self):
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "boundary.json"
+            path.write_text(json.dumps({"type": "Polygon", "coordinates": [
+                [[1, 1], [4, 1], [4, 4], [1, 1]],
+                [[2, 2], [3, 2], [3, 3], [2, 3]],
+            ]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "interior ring 1 must be closed"):
+                smoke.validate_boundary(path)
+
     @patch("scripts.live_smoke_test.request_json", return_value={
         "inspection_id": "insp_123", "parent_inspection_id": None,
         "vision": {"provider": "ollama"}, "risk": {"level": "low"},
@@ -117,6 +144,19 @@ class SmokeTestHelpers(unittest.TestCase):
         with patch("sys.argv", ["live_smoke_test.py", "--check-history", "--farm-id", "farm"]):
             args = smoke.parse_args()
         self.assertTrue(args.check_history)
+
+    def test_evidence_coordinates_must_be_in_geographic_ranges(self):
+        with patch("sys.argv", ["live_smoke_test.py", "--check-evidence", "--boundary-json", "boundary.json",
+                                "--latitude", "91", "--longitude", "77", "--confirmed-boundary-checked"]):
+            with self.assertRaises(SystemExit) as error:
+                smoke.parse_args()
+        self.assertEqual(error.exception.code, 2)
+
+    def test_weather_longitude_must_be_in_geographic_range(self):
+        with patch("sys.argv", ["live_smoke_test.py", "--weather-lat", "9.5", "--weather-lon", "181"]):
+            with self.assertRaises(SystemExit) as error:
+                smoke.parse_args()
+        self.assertEqual(error.exception.code, 2)
 
 
 if __name__ == "__main__":
