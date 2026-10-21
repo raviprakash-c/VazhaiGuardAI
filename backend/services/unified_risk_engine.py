@@ -119,7 +119,7 @@ def calculate_unified_risk(
     sources = {
         "vision": bool(vision),
         "weather": bool(weather),
-        "satellite": bool(satellite),
+        "satellite": bool(satellite) and satellite.get("available") is not False,
         "soil": bool(soil and soil.get("available")),
     }
 
@@ -132,7 +132,7 @@ def calculate_unified_risk(
 
     # A known temporal crop conflict also makes the satellite observation
     # historical until the farmer confirms the field.
-    if any(c.get("type") == "temporal_crop_conflict" for c in evidence_state["conflicts"]):
+    if any(c.get("source") == "satellite" for c in evidence_state["conflicts"]):
         adjusted["satellite"] = 0.0
 
     active_weight = sum(adjusted[name] for name, available in sources.items() if available)
