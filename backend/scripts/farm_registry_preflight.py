@@ -29,7 +29,13 @@ class Finding:
 
 
 def _number(value: Any) -> bool:
-    return isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value)
+    # Python integers are finite by definition; math.isfinite() may overflow
+    # when handed an extremely large integer parsed from JSON.
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
 
 
 def _valid_position(position: Any) -> bool:
