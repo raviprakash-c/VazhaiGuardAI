@@ -124,7 +124,16 @@ def build_evidence_state(
     """
     now = datetime.now(timezone.utc)
 
-    sources = {"vision": vision, "weather": weather, "satellite": satellite, "soil": soil}
+    sources = {
+        "vision": vision,
+        "weather": weather,
+        "satellite": (
+            satellite
+            if satellite and satellite.get("available") is not False
+            else None
+        ),
+        "soil": soil,
+    }
 
     freshness: dict[str, dict[str, Any]] = {}
     for name, evidence in sources.items():
