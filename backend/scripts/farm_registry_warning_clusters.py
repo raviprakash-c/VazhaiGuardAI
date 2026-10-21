@@ -102,11 +102,23 @@ def build_report(records: Any) -> dict[str, Any]:
             if any(term in key.lower() for term in SOURCE_TERMS):
                 provenance_presence[key] += 1
 
+    parcel_groups = _groups(parcel_refs)
+    geometry_groups = _groups(geometries)
+    parcel_warning_count = sum(group["occurrences"] - 1 for group in parcel_groups)
+    geometry_warning_count = sum(group["occurrences"] - 1 for group in geometry_groups)
+    acreage_warning_count = len(acreage_mismatches)
+
     return {
         "records_inspected": len(records),
-        "duplicate_parcel_reference_groups": _groups(parcel_refs),
-        "duplicate_boundary_geometry_groups": _groups(geometries),
+        "duplicate_parcel_reference_groups": parcel_groups,
+        "duplicate_boundary_geometry_groups": geometry_groups,
         "acreage_mismatches": acreage_mismatches,
+        "warning_reconciliation": {
+            "duplicate_parcel_reference_warnings": parcel_warning_count,
+            "duplicate_boundary_geometry_warnings": geometry_warning_count,
+            "mapped_area_exceeds_total_warnings": acreage_warning_count,
+            "total_accounted_warnings": parcel_warning_count + geometry_warning_count + acreage_warning_count,
+        },
         "declared_acreage_distribution": dict(
             sorted(total_acres_distribution.items())
         ),
