@@ -60,6 +60,12 @@ class FarmRegistryPreflightTests(unittest.TestCase):
         findings = inspect_registry([bad])
         self.assertIn("confirmed_boundary_invalid", {finding.code for finding in findings})
 
+    def test_extremely_large_integer_is_rejected_without_crashing(self):
+        bad = record()
+        bad["location"] = {"latitude": 10**1000, "longitude": 78}
+        findings = inspect_registry([bad])
+        self.assertIn("location_invalid", {finding.code for finding in findings})
+
     def test_non_list_root_is_reported(self):
         self.assertEqual(inspect_registry({"farm_id": "x"})[0].code, "registry_not_list")
 
