@@ -61,6 +61,10 @@ class RiskFusionEvidenceContractTests(unittest.TestCase):
             set(response["risk"]["weights_used"]),
             set(response["risk"]["signals_used"]),
         )
+        self.assertEqual(
+            response["risk"]["evidence_state"]["effective_weights"],
+            response["risk"]["weights_used"],
+        )
 
     def test_missing_satellite_is_absent_from_final_api_weights_and_trace(self):
         response = self.call_risk_fusion(None)
