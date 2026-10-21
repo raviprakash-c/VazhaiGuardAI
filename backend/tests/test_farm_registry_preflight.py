@@ -27,6 +27,28 @@ class FarmRegistryPreflightTests(unittest.TestCase):
     def test_clean_record_has_no_findings(self):
         self.assertEqual(inspect_registry([record()]), [])
 
+    def test_valid_multipolygon_is_accepted(self):
+        boundary = {
+            "type": "MultiPolygon",
+            "coordinates": [[[
+                [78.0, 10.0], [78.01, 10.0], [78.01, 10.01],
+                [78.0, 10.0],
+            ]]],
+        }
+        findings = inspect_registry([record(boundary=boundary)])
+        self.assertNotIn("confirmed_boundary_invalid", {finding.code for finding in findings})
+
+    def test_invalid_ring_inside_multipolygon_is_rejected(self):
+        boundary = {
+            "type": "MultiPolygon",
+            "coordinates": [[[
+                [78.0, 10.0], [78.01, 10.0], [78.01, 10.01],
+                [78.02, 10.02],
+            ]]],
+        }
+        findings = inspect_registry([record(boundary=boundary)])
+        self.assertIn("confirmed_boundary_invalid", {finding.code for finding in findings})
+
     def test_duplicate_farm_ids_are_errors(self):
         findings = inspect_registry([record("same"), record("same")])
         self.assertIn("duplicate_farm_id", {finding.code for finding in findings})
