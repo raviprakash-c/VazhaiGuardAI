@@ -26,6 +26,15 @@ SOURCE_TERMS = (
 )
 
 
+def _finite_number(value: Any) -> bool:
+    """Check finite JSON numbers without overflowing on arbitrarily large ints."""
+    if isinstance(value, bool):
+        return False
+    if isinstance(value, int):
+        return True
+    return isinstance(value, float) and math.isfinite(value)
+
+
 def _fingerprint(value: Any) -> str:
     raw = json.dumps(
         value, sort_keys=True, separators=(",", ":"), ensure_ascii=False,
@@ -75,13 +84,11 @@ def build_report(records: Any) -> dict[str, Any]:
         profile = record.get("farm_profile")
         if isinstance(profile, dict):
             total = profile.get("total_farm_acres")
-            if isinstance(total, (int, float)) and not isinstance(total, bool) and math.isfinite(total):
+            if _finite_number(total):
                 total_acres_distribution[str(total)] += 1
             mapped = record.get("mapped_area_acres")
             if (
-                isinstance(total, (int, float)) and not isinstance(total, bool)
-                and isinstance(mapped, (int, float)) and not isinstance(mapped, bool)
-                and math.isfinite(total) and math.isfinite(mapped)
+                _finite_number(total) and _finite_number(mapped)
                 and total > 0 and mapped > total
             ):
                 acreage_mismatches.append({
