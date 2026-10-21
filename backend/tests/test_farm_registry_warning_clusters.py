@@ -29,6 +29,14 @@ class FarmRegistryWarningClusterTests(unittest.TestCase):
         self.assertEqual(len(report["duplicate_boundary_geometry_groups"]), 1)
         self.assertEqual(report["duplicate_boundary_geometry_groups"][0]["records"], [1, 2])
 
+    def test_warning_reconciliation_counts_each_duplicate_after_first(self):
+        report = build_report([record(1), record(2)])
+        counts = report["warning_reconciliation"]
+        self.assertEqual(counts["duplicate_parcel_reference_warnings"], 1)
+        self.assertEqual(counts["duplicate_boundary_geometry_warnings"], 1)
+        self.assertEqual(counts["mapped_area_exceeds_total_warnings"], 2)
+        self.assertEqual(counts["total_accounted_warnings"], 4)
+
     def test_report_does_not_expose_ids_or_parcel_values(self):
         report = build_report([record(1), record(2)])
         rendered = json.dumps(report)
