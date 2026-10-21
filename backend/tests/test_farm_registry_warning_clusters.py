@@ -49,6 +49,11 @@ class FarmRegistryWarningClusterTests(unittest.TestCase):
         report = build_report([first, second])
         self.assertEqual(report["duplicate_boundary_geometry_groups"], [])
 
+    def test_extremely_large_integer_does_not_overflow(self):
+        row = record(1, total=10**1000, mapped=9)
+        report = build_report([row])
+        self.assertEqual(report["acreage_mismatches"], [])
+
     def test_non_list_root_rejected(self):
         with self.assertRaises(ValueError):
             build_report({"not": "a list"})
