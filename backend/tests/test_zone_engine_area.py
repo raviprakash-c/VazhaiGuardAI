@@ -2,13 +2,24 @@ import unittest
 
 from shapely.geometry import Point, shape
 
-from backend.services.zone_engine import (
-    area_m2_to_acres,
-    calculate_area_m2,
-    generate_zones,
-    polygon_to_geojson,
-    validate_polygon_geojson,
-)
+try:
+    # GitHub Actions runs the backend tests with backend/ as its working directory.
+    from services.zone_engine import (
+        area_m2_to_acres,
+        calculate_area_m2,
+        generate_zones,
+        polygon_to_geojson,
+        validate_polygon_geojson,
+    )
+except ModuleNotFoundError:
+    # Also support running discovery from the repository root.
+    from backend.services.zone_engine import (
+        area_m2_to_acres,
+        calculate_area_m2,
+        generate_zones,
+        polygon_to_geojson,
+        validate_polygon_geojson,
+    )
 
 
 class ZoneEngineAreaTests(unittest.TestCase):
