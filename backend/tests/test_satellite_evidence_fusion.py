@@ -43,10 +43,12 @@ class SatelliteEvidenceFusionTests(unittest.TestCase):
             farm_context=farm_context,
         )
 
-    def test_missing_satellite_does_not_enter_weights_or_signals(self):
-        result = self.risk(None)
-        self.assertNotIn("satellite", result["weights_used"])
-        self.assertNotIn("satellite", result["signals_used"])
+    def test_missing_or_unavailable_satellite_does_not_enter_weights_or_signals(self):
+        for satellite in (None, {"available": False, "risk_score": 90}):
+            with self.subTest(satellite=satellite):
+                result = self.risk(satellite)
+                self.assertNotIn("satellite", result["weights_used"])
+                self.assertNotIn("satellite", result["signals_used"])
 
     def test_aging_satellite_has_lower_weight_than_fresh_satellite(self):
         fresh = self.risk(self.satellite(24))
