@@ -1,7 +1,13 @@
-﻿import unittest
+import unittest
 from unittest.mock import patch
 
-from services.satellite_service import _geometry, _satellite_stress, analyze_satellite_evidence, satellite_configuration_status
+from services.satellite_service import (
+    _canonical_polygon,
+    _geometry,
+    _satellite_stress,
+    analyze_satellite_evidence,
+    satellite_configuration_status,
+)
 
 
 class SatelliteServiceTests(unittest.TestCase):
@@ -28,17 +34,74 @@ class SatelliteServiceTests(unittest.TestCase):
         self.assertIsNone(confidence)
 
     def test_boundary_is_preserved_as_farmer_confirmed(self):
-        boundary = {"type": "Polygon", "coordinates": [[[78.0, 10.0], [78.001, 10.0], [78.001, 10.001], [78.0, 10.0]]]}
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [
+                [[78.0, 10.0], [78.001, 10.0], [78.001, 10.001], [78.0, 10.0]]
+            ],
+        }
         geometry, scope, confirmed = _geometry(boundary, 10.0, 78.0)
         self.assertEqual(geometry["type"], "Polygon")
         self.assertTrue(confirmed)
         self.assertIn("farmer-confirmed", scope)
 
+    def test_canonical_polygon_preserves_interior_rings(self):
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [
+                [[78.0, 10.0], [78.004, 10.0], [78.004, 10.004],
+                 [78.0, 10.004], [78.0, 10.0]],
+                [[78.001, 10.001], [78.002, 10.001], [78.002, 10.002],
+                 [78.001, 10.002], [78.001, 10.001]],
+            ],
+        }
+        result = _canonical_polygon(boundary)
+        self.assertEqual(result["type"], "Polygon")
+        self.assertEqual(len(result["coordinates"]), 2)
+        self.assertEqual(result["coordinates"][0], boundary["coordinates"][0])
+        self.assertEqual(result["coordinates"][1], boundary["coordinates"][1])
+
+    def test_canonical_polygon_closes_each_ring(self):
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [
+                [[78.0, 10.0], [78.004, 10.0], [78.004, 10.004], [78.0, 10.004]],
+                [[78.001, 10.001], [78.002, 10.001], [78.002, 10.002], [78.001, 10.002]],
+            ],
+        }
+        result = _canonical_polygon(boundary)
+        self.assertEqual(len(result["coordinates"]), 2)
+        for ring in result["coordinates"]:
+            self.assertEqual(ring[0], ring[-1])
+
+    def test_canonical_polygon_rejects_invalid_interior_ring(self):
+        boundary = {
+            "type": "Polygon",
+            "coordinates": [
+                [[78.0, 10.0], [78.004, 10.0], [78.004, 10.004], [78.0, 10.0]],
+                [[78.001, 10.001], [78.002, 10.001], [78.001, 10.001]],
+            ],
+        }
+        with self.assertRaises(ValueError):
+            _canonical_polygon(boundary)
+
     @patch("services.satellite_service._token", return_value="test-token")
-    @patch("services.satellite_service._stats", side_effect=[([0.62, 0.35, -0.05], {"interval_count": 1, "quality": "valid_statistics"}), ([0.55, 0.31, -0.02], {"interval_count": 1, "quality": "valid_statistics"})])
+    @patch(
+        "services.satellite_service._stats",
+        side_effect=[
+            ([0.62, 0.35, -0.05], {"interval_count": 1, "quality": "valid_statistics"}),
+            ([0.55, 0.31, -0.02], {"interval_count": 1, "quality": "valid_statistics"}),
+        ],
+    )
     @patch("services.satellite_service._search")
     def test_real_response_shape_is_deterministic(self, search, _stats, _token):
-        scene = {"id": "S2_TEST", "properties": {"datetime": "2026-10-01T05:00:00Z", "eo:cloud_cover": 4.2}}
+        scene = {
+            "id": "S2_TEST",
+            "properties": {
+                "datetime": "2026-10-01T05:00:00Z",
+                "eo:cloud_cover": 4.2,
+            },
+        }
         search.side_effect = [[scene], [scene]]
         result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
         self.assertTrue(result["available"])
