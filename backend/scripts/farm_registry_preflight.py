@@ -49,20 +49,42 @@ def _valid_position(position: Any) -> bool:
     )
 
 
-def _valid_polygon(boundary: Any) -> bool:
-    if not isinstance(boundary, dict) or boundary.get("type") != "Polygon":
+def _valid_ring(ring: Any) -> bool:
+    return (
+        isinstance(ring, list)
+        and len(ring) >= 4
+        and all(_valid_position(position) for position in ring)
+        and ring[0][:2] == ring[-1][:2]
+    )
+
+
+def _valid_polygon_coordinates(coordinates: Any) -> bool:
+    return (
+        isinstance(coordinates, list)
+        and bool(coordinates)
+        and all(_valid_ring(ring) for ring in coordinates)
+    )
+
+
+def _valid_boundary(boundary: Any) -> bool:
+    """Validate the supported GeoJSON Polygon and MultiPolygon geometries."""
+    if not isinstance(boundary, dict):
         return False
-    rings = boundary.get("coordinates")
-    if not isinstance(rings, list) or not rings:
-        return False
-    for ring in rings:
-        if not isinstance(ring, list) or len(ring) < 4:
-            return False
-        if not all(_valid_position(position) for position in ring):
-            return False
-        if ring[0][:2] != ring[-1][:2]:
-            return False
-    return True
+
+    geometry_type = boundary.get("type")
+    coordinates = boundary.get("coordinates")
+
+    if geometry_type == "Polygon":
+        return _valid_polygon_coordinates(coordinates)
+
+    if geometry_type == "MultiPolygon":
+        return (
+            isinstance(coordinates, list)
+            and bool(coordinates)
+            and all(_valid_polygon_coordinates(polygon) for polygon in coordinates)
+        )
+
+    return False
 
 
 def inspect_registry(records: Any) -> list[Finding]:
@@ -97,10 +119,10 @@ def inspect_registry(records: Any) -> list[Finding]:
                 findings.append(Finding("ERROR", "location_invalid", index, "Latitude/longitude must be finite numeric values in range."))
 
         boundary = record.get("boundary")
-        if record.get("farmer_confirmed") is True and not _valid_polygon(boundary):
-            findings.append(Finding("ERROR", "confirmed_boundary_invalid", index, "Farmer-confirmed records require a valid closed GeoJSON Polygon."))
+        if record.get("farmer_confirmed") is True and not _valid_boundary(boundary):
+            findings.append(Finding("ERROR", "confirmed_boundary_invalid", index, "Farmer-confirmed records require a valid closed GeoJSON Polygon or MultiPolygon."))
 
-        if isinstance(boundary, dict) and _valid_polygon(boundary):
+        if isinstance(boundary, dict) and _valid_boundary(boundary):
             # Canonical JSON makes exact duplicate geometry detectable without
             # depending on dict insertion order. This is a warning, not proof
             # that two records refer to the same legal parcel.
