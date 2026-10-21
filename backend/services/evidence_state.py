@@ -90,7 +90,7 @@ def satellite_reliability(satellite: dict[str, Any] | None) -> float:
     Satellite imagery is periodic rather than a live sensor. The factor
     prevents an old image from overpowering current farmer observations.
     """
-    if not satellite:
+    if not satellite or satellite.get("available") is False:
         return 0.0
 
     age = _age_hours(satellite, datetime.now(timezone.utc))
@@ -124,15 +124,29 @@ def build_evidence_state(
     """
     now = datetime.now(timezone.utc)
 
-    sources = {"vision": vision, "weather": weather, "satellite": satellite, "soil": soil}
+    sources = {
+        "vision": vision,
+        "weather": weather,
+        "satellite": (
+            satellite
+            if satellite and satellite.get("available") is not False
+            else None
+        ),
+        "soil": soil,
+    }
 
     freshness: dict[str, dict[str, Any]] = {}
     for name, evidence in sources.items():
-        age = _age_hours(evidence, now)
+        available = bool(evidence) and not (
+            name == "satellite"
+            and isinstance(evidence, dict)
+            and evidence.get("available") is False
+        )
+        age = _age_hours(evidence, now) if available else None
         freshness[name] = {
-            "available": bool(evidence),
+            "available": available,
             "age_hours": round(age, 1) if age is not None else None,
-            "status": _freshness(age, name) if evidence else "unavailable",
+            "status": _freshness(age, name) if available else "unavailable",
         }
 
     conflicts: list[dict[str, Any]] = []
@@ -148,13 +162,28 @@ def build_evidence_state(
                     pass
 
     satellite_state = str((satellite or {}).get("crop_state", "")).lower()
-    if satellite_state in {"bare", "empty", "no_crop"} and crop_age_days is not None and crop_age_days >= 30:
-        conflicts.append({
-            "type": "temporal_crop_conflict",
-            "source": "satellite",
-            "message": "Satellite indicates bare/low vegetation but the farmer crop record is older than 30 days.",
-            "resolution": "Treat satellite as historical evidence and prefer current farmer/photo evidence.",
-        })
+    if satellite_state in {"bare", "empty", "no_crop"}:
+        vision_age = _age_hours(vision, now)
+        if (
+            vision
+            and vision.get("crop_visible") is True
+            and vision_age is not None
+            and vision_age <= 24
+        ):
+            conflicts.append({
+                "type": "satellite_photo_conflict",
+                "source": "satellite",
+                "message": "A recent farmer photo shows visible crop while satellite evidence indicates bare ground.",
+                "resolution": "Prefer the recent photo for immediate plant assessment and verify the boundary/field condition.",
+            })
+
+        if crop_age_days is not None and crop_age_days >= 30:
+            conflicts.append({
+                "type": "temporal_crop_conflict",
+                "source": "satellite",
+                "message": "Satellite indicates bare/low vegetation but the farmer crop record is older than 30 days.",
+                "resolution": "Treat satellite as historical evidence and prefer current farmer/photo evidence.",
+            })
 
     satellite_factor = satellite_reliability(satellite)
     soil_factor = soil_reliability(soil)
