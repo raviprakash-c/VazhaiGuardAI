@@ -88,6 +88,36 @@ def _fuse_signals(
     )
 
 
+def _enforce_evidence_safety(
+    decision: dict[str, Any],
+    risk: dict[str, Any],
+) -> dict[str, Any]:
+    """Deterministically require field verification for stale/conflicting evidence."""
+    result = dict(decision or {})
+    evidence_state = risk.get("evidence_state") or {}
+    conflicts = evidence_state.get("conflicts") or []
+    satellite_status = (
+        evidence_state.get("freshness", {})
+        .get("satellite", {})
+        .get("status")
+    )
+    signals_used = set(risk.get("signals_used") or [])
+    stale_satellite_used = satellite_status == "stale" and "satellite" in signals_used
+
+    if conflicts or stale_satellite_used:
+        result["needs_field_verification"] = True
+        result["follow_up_check"] = (
+            "Verify the crop condition directly in the field and confirm the satellite boundary/observation."
+            if conflicts
+            else "Check the current crop in the field; satellite imagery is stale and is not a current plant-level observation."
+        )
+        if not result.get("farmer_message"):
+            result["farmer_message"] = (
+                "Please check the crop directly in the field before deciding on treatment."
+            )
+    return result
+
+
 def _build_action_prompt(
     *,
     vision: dict[str, Any],
@@ -287,6 +317,7 @@ def risk_fusion(request: RiskFusionRequest) -> dict[str, Any]:
         "weights_used": weights_used,
         "evidence_state": risk_result.get("evidence_state", {}),
     }
+    decision = _enforce_evidence_safety(decision, risk)
     evaluation = evaluate_multimodal_decision(
         vision=request.vision,
         weather=request.weather,
