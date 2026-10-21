@@ -78,30 +78,33 @@ def _geometry(
 
 
 def _canonical_polygon(geometry: dict[str, Any]) -> dict[str, Any]:
-    """Return a strict GeoJSON Polygon with [[lng, lat], ...] coordinate nesting."""
+    """Normalize a GeoJSON Polygon while preserving its exterior and interior rings."""
     if geometry.get("type") != "Polygon":
         raise ValueError("Satellite statistics currently require a Polygon farm boundary.")
 
     coordinates = geometry.get("coordinates")
-    if not isinstance(coordinates, list) or len(coordinates) != 1:
-        raise ValueError("Farm Polygon must contain exactly one exterior ring.")
+    if not isinstance(coordinates, list) or not coordinates:
+        raise ValueError("Farm Polygon must contain an exterior ring.")
 
-    ring = coordinates[0]
-    if not isinstance(ring, list) or len(ring) < 4:
-        raise ValueError("Farm Polygon exterior ring is invalid.")
+    normalized_rings: list[list[list[float]]] = []
+    for ring in coordinates:
+        if not isinstance(ring, list) or len(ring) < 4:
+            raise ValueError("Farm Polygon ring is invalid.")
 
-    normalized: list[list[float]] = []
-    for point in ring:
-        if not isinstance(point, (list, tuple)) or len(point) < 2:
-            raise ValueError("Farm Polygon contains an invalid coordinate pair.")
-        normalized.append([float(point[0]), float(point[1])])
+        normalized: list[list[float]] = []
+        for point in ring:
+            if not isinstance(point, (list, tuple)) or len(point) < 2:
+                raise ValueError("Farm Polygon contains an invalid coordinate pair.")
+            normalized.append([float(point[0]), float(point[1])])
 
-    if normalized[0] != normalized[-1]:
-        normalized.append(normalized[0])
+        if normalized[0] != normalized[-1]:
+            normalized.append(normalized[0])
+
+        normalized_rings.append(normalized)
 
     return {
         "type": "Polygon",
-        "coordinates": [normalized],
+        "coordinates": normalized_rings,
     }
 
 
