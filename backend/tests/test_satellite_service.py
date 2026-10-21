@@ -1,7 +1,7 @@
 ﻿import unittest
 from unittest.mock import patch
 
-from services.satellite_service import _geometry, _satellite_stress, analyze_satellite_evidence, satellite_configuration_status
+from services.satellite_service import _geometry, _scene_time, _satellite_stress, analyze_satellite_evidence, satellite_configuration_status
 
 
 class SatelliteServiceTests(unittest.TestCase):
@@ -46,6 +46,37 @@ class SatelliteServiceTests(unittest.TestCase):
         self.assertEqual(result["resolution_m"], 10)
         self.assertAlmostEqual(result["ndvi"], 0.62)
         self.assertIn(result["trend"], {"improving", "stable", "declining"})
+
+    @patch("services.satellite_service._search", return_value=[{"id": "S2_NO_TIME", "properties": {}}])
+    def test_scene_without_acquisition_timestamp_is_rejected_without_crashing(self, _search):
+        result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
+        self.assertFalse(result["available"])
+        self.assertIn("No Sentinel-2 L2A observation", result["reason"])
+
+    @patch("services.satellite_service._token", return_value="test-token")
+    @patch("services.satellite_service._stats", side_effect=[([0.62, 0.35, -0.05], {"interval_count": 1, "quality": "valid_statistics"}), ([0.55, 0.31, -0.02], {"interval_count": 1, "quality": "valid_statistics"})])
+    @patch("services.satellite_service._search")
+    def test_high_cloud_scene_emits_quality_warning(self, search, _stats, _token):
+        scene = {"id": "S2_CLOUDY", "properties": {"datetime": "2026-10-20T05:00:00Z", "eo:cloud_cover": 30.0}}
+        search.side_effect = [[scene], [scene]]
+        result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
+        self.assertTrue(any("substantial scene cloud cover" in warning for warning in result["warnings"]))
+
+    @patch("services.satellite_service._search", return_value=[{"id": "S2_NO_CLOUD", "properties": {"datetime": "2026-10-20T05:00:00Z"}}])
+    def test_scene_without_cloud_metadata_is_rejected(self, _search):
+        result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
+        self.assertFalse(result["available"])
+        self.assertIn("No Sentinel-2 L2A observation", result["reason"])
+
+    @patch("services.satellite_service._token", return_value="test-token")
+    @patch("services.satellite_service._stats", side_effect=[([0.62, 0.35, -0.05], {"interval_count": 1, "quality": "valid_statistics"}), ([0.55, 0.31, -0.02], {"interval_count": 1, "quality": "valid_statistics"})])
+    @patch("services.satellite_service._search")
+    def test_stale_scene_emits_warning(self, search, _stats, _token):
+        scene = {"id": "S2_STALE", "properties": {"datetime": "2026-10-01T05:00:00Z", "eo:cloud_cover": 4.2}}
+        search.side_effect = [[scene], [scene]]
+        result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
+        self.assertTrue(any("older than 10 days" in warning for warning in result["warnings"]))
+        self.assertEqual(result["scene_id"], "S2_STALE")
 
     def test_configuration_status_has_no_secret_value(self):
         status = satellite_configuration_status()
