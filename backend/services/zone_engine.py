@@ -37,7 +37,7 @@ def validate_polygon_geojson(boundary: Dict[str, Any]) -> Polygon:
     if not coordinates[0]:
         raise ValueError("Boundary ring is empty.")
 
-    polygon = Polygon(coordinates[0])
+    polygon = Polygon(coordinates[0], coordinates[1:])
 
     if polygon.is_empty:
         raise ValueError("Boundary polygon is empty.")
@@ -199,21 +199,16 @@ def zone_label(row: int, column: int) -> str:
 
 def polygon_to_geojson(polygon: Polygon) -> Dict[str, Any]:
     result = mapping(polygon)
-
     return {
         "type": "Polygon",
         "coordinates": [
             [
-                [
-                    float(point[0]),
-                    float(point[1]),
-                ]
-                for point in result["coordinates"][0]
+                [float(point[0]), float(point[1])]
+                for point in ring
             ]
+            for ring in result["coordinates"]
         ],
     }
-
-
 # ---------------------------------------------------------
 # MAIN ZONE GENERATOR
 # ---------------------------------------------------------
@@ -243,7 +238,7 @@ def generate_zones(
     farm_area_m2 = abs(projected_farm.area)
 
     rows, columns = calculate_grid_dimensions(
-        farm_area_m2=farm_area_m2,
+        area_m2=farm_area_m2,
         target_zone_area_acres=target_zone_area_acres,
     )
 
