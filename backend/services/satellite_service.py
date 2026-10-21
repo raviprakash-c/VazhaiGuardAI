@@ -207,7 +207,36 @@ def _scene_time(scene: dict[str, Any]) -> datetime:
     if not raw:
         raise RuntimeError("Copernicus scene has no acquisition timestamp.")
 
-    return datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone(timezone.utc)
+    try:
+        parsed = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise RuntimeError("Copernicus scene has an invalid acquisition timestamp.") from exc
+
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _quality_filtered_scenes(
+    scenes: list[dict[str, Any]],
+    max_cloud_percent: float,
+) -> list[dict[str, Any]]:
+    """Keep only scenes with trustworthy acquisition time and cloud metadata."""
+    usable: list[dict[str, Any]] = []
+    for scene in scenes:
+        try:
+            _scene_time(scene)
+        except (AttributeError, RuntimeError, TypeError, ValueError):
+            continue
+
+        properties = scene.get("properties")
+        if not isinstance(properties, dict):
+            continue
+        cloud = _num(properties.get("eo:cloud_cover"))
+        if cloud is None or not math.isfinite(cloud) or not 0 <= cloud <= max_cloud_percent:
+            continue
+        usable.append(scene)
+    return usable
 
 
 def _scene_window(scene_time: datetime) -> tuple[str, str]:
@@ -572,11 +601,17 @@ def analyze_satellite_evidence(
     recent_start = now - timedelta(days=lookback_days)
     baseline_start = recent_start - timedelta(days=baseline_days)
 
-    recent = _search(geometry, recent_start, now, max_cloud_percent)
-    baseline = _search(
-        geometry,
-        baseline_start,
-        recent_start,
+    recent = _quality_filtered_scenes(
+        _search(geometry, recent_start, now, max_cloud_percent),
+        max_cloud_percent,
+    )
+    baseline = _quality_filtered_scenes(
+        _search(
+            geometry,
+            baseline_start,
+            recent_start,
+            max_cloud_percent,
+        ),
         max_cloud_percent,
     )
 
