@@ -47,9 +47,11 @@ class SatelliteServiceTests(unittest.TestCase):
         self.assertAlmostEqual(result["ndvi"], 0.62)
         self.assertIn(result["trend"], {"improving", "stable", "declining"})
 
-    def test_scene_without_acquisition_timestamp_raises_baseline_error(self):
-        with self.assertRaisesRegex(RuntimeError, "no acquisition timestamp"):
-            _scene_time({"id": "S2_NO_TIME", "properties": {}})
+    @patch("services.satellite_service._search", return_value=[{"id": "S2_NO_TIME", "properties": {}}])
+    def test_scene_without_acquisition_timestamp_is_rejected_without_crashing(self, _search):
+        result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
+        self.assertFalse(result["available"])
+        self.assertIn("No Sentinel-2 L2A observation", result["reason"])
 
     @patch("services.satellite_service._token", return_value="test-token")
     @patch("services.satellite_service._stats", side_effect=[([0.62, 0.35, -0.05], {"interval_count": 1, "quality": "valid_statistics"}), ([0.55, 0.31, -0.02], {"interval_count": 1, "quality": "valid_statistics"})])
@@ -59,6 +61,12 @@ class SatelliteServiceTests(unittest.TestCase):
         search.side_effect = [[scene], [scene]]
         result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
         self.assertTrue(any("substantial scene cloud cover" in warning for warning in result["warnings"]))
+
+    @patch("services.satellite_service._search", return_value=[{"id": "S2_NO_CLOUD", "properties": {"datetime": "2026-10-20T05:00:00Z"}}])
+    def test_scene_without_cloud_metadata_is_rejected(self, _search):
+        result = analyze_satellite_evidence(latitude=10.0, longitude=78.0)
+        self.assertFalse(result["available"])
+        self.assertIn("No Sentinel-2 L2A observation", result["reason"])
 
     @patch("services.satellite_service._token", return_value="test-token")
     @patch("services.satellite_service._stats", side_effect=[([0.62, 0.35, -0.05], {"interval_count": 1, "quality": "valid_statistics"}), ([0.55, 0.31, -0.02], {"interval_count": 1, "quality": "valid_statistics"})])
