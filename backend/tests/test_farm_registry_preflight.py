@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.farm_registry_preflight import inspect_registry, load_registry, main
+from scripts.farm_registry_preflight import boundary_inventory, inspect_registry, load_registry, main
 
 
 def record(farm_id="farm-a", *, parcel_id=None, mapped=2, total=5, boundary=None):
@@ -26,6 +26,30 @@ def record(farm_id="farm-a", *, parcel_id=None, mapped=2, total=5, boundary=None
 class FarmRegistryPreflightTests(unittest.TestCase):
     def test_clean_record_has_no_findings(self):
         self.assertEqual(inspect_registry([record()]), [])
+
+    def test_boundary_inventory_counts_only_and_distinguishes_confirmation(self):
+        confirmed = record("confirmed")
+        unconfirmed = record("unconfirmed")
+        unconfirmed["farmer_confirmed"] = False
+        missing = record("missing")
+        missing.pop("boundary")
+        invalid_confirmed = record("invalid")
+        invalid_confirmed["boundary"] = {"type": "Polygon", "coordinates": []}
+        counts = boundary_inventory([confirmed, unconfirmed, missing, invalid_confirmed])
+        self.assertEqual(counts, {
+            "confirmed_valid": 1,
+            "confirmed_invalid": 1,
+            "present_unconfirmed": 1,
+            "missing": 1,
+        })
+
+    def test_boundary_inventory_handles_unreadable_registry_shape(self):
+        self.assertEqual(boundary_inventory({"not": "a list"}), {
+            "confirmed_valid": 0,
+            "confirmed_invalid": 0,
+            "present_unconfirmed": 0,
+            "missing": 0,
+        })
 
     def test_valid_multipolygon_is_accepted(self):
         boundary = {
