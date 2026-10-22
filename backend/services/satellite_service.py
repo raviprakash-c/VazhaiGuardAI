@@ -871,13 +871,18 @@ def render_true_color_preview(
 
 
 def satellite_configuration_status() -> dict[str, Any]:
+    # Report missing variable NAMES only. Never return credential values.
+    required_settings = ("CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET")
+    missing_settings = [
+        name for name in required_settings if not os.getenv(name)
+    ]
     return {
-        "configured": bool(
-            os.getenv("CDSE_CLIENT_ID") and os.getenv("CDSE_CLIENT_SECRET")
-        ),
+        "configured": not missing_settings,
+        "missing_settings": missing_settings,
         "provider": "Copernicus Data Space Ecosystem",
         "collection": COLLECTION,
         "image_resolution_m": 10,
+        # This is configuration health, not a live provider probe.
         "satellite_is_live": False,
         "scope": "farm_or_zone_level",
         "layers": ["ndvi", "ndre", "ndwi", "stress"],

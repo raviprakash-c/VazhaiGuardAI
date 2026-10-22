@@ -47,6 +47,25 @@ class SatelliteServiceTests(unittest.TestCase):
         self.assertAlmostEqual(result["ndvi"], 0.62)
         self.assertIn(result["trend"], {"improving", "stable", "declining"})
 
+    @patch.dict("os.environ", {"CDSE_CLIENT_ID": "test-client", "CDSE_CLIENT_SECRET": "test-secret"})
+    def test_configuration_status_reports_configured_without_exposing_values(self):
+        status = satellite_configuration_status()
+        self.assertTrue(status["configured"])
+        self.assertEqual(status["missing_settings"], [])
+        self.assertNotIn("test-client", str(status))
+        self.assertNotIn("test-secret", str(status))
+
+    @patch.dict("os.environ", {}, clear=True)
+    def test_configuration_status_lists_missing_names_only(self):
+        status = satellite_configuration_status()
+        self.assertFalse(status["configured"])
+        self.assertEqual(
+            status["missing_settings"],
+            ["CDSE_CLIENT_ID", "CDSE_CLIENT_SECRET"],
+        )
+        self.assertNotIn("client_secret", status)
+        self.assertNotIn("test-secret", str(status))
+
     def test_configuration_status_has_no_secret_value(self):
         status = satellite_configuration_status()
         self.assertIn("configured", status)

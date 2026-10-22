@@ -39,6 +39,7 @@ def satellite_health() -> dict[str, Any]:
         "indices": ["NDVI", "NDRE", "NDWI"],
         "layers": status.get("layers", []),
         "status": "configured" if status["configured"] else "setup_required",
+        "missing_settings": status.get("missing_settings", []),
         "satellite_is_live": False,
         "scope": status["scope"],
         "resolution_m": status["image_resolution_m"],
