@@ -153,6 +153,35 @@ def inspect_registry(records: Any) -> list[Finding]:
     return findings
 
 
+
+def boundary_inventory(records: Any) -> dict[str, int]:
+    """Count boundary readiness without printing farm identifiers or geospatial data."""
+    counts = {
+        "confirmed_valid": 0,
+        "confirmed_invalid": 0,
+        "present_unconfirmed": 0,
+        "missing": 0,
+    }
+    if not isinstance(records, list):
+        return counts
+
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        boundary = record.get("boundary")
+        valid = _valid_boundary(boundary)
+        confirmed = record.get("farmer_confirmed") is True
+        if confirmed and valid:
+            counts["confirmed_valid"] += 1
+        elif confirmed:
+            counts["confirmed_invalid"] += 1
+        elif boundary is not None:
+            counts["present_unconfirmed"] += 1
+        else:
+            counts["missing"] += 1
+    return counts
+
+
 def load_registry(path: Path) -> Any:
     try:
         return json.loads(path.read_text(encoding="utf-8"))
@@ -178,7 +207,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{finding.severity} {finding.code}{location}: {finding.detail}")
 
     counts = Counter(finding.severity for finding in findings)
-    print(f"Farm registry preflight: records={len(records) if isinstance(records, list) else 0}, errors={counts['ERROR']}, warnings={counts['WARNING']}")
+    record_count = len(records) if isinstance(records, list) else 0
+    print(f"Farm registry preflight: records={record_count}, errors={counts['ERROR']}, warnings={counts['WARNING']}")
+    boundary_counts = boundary_inventory(records)
+    print(
+        "Boundary inventory (counts only): "
+        f"confirmed_valid={boundary_counts['confirmed_valid']}, "
+        f"confirmed_invalid={boundary_counts['confirmed_invalid']}, "
+        f"present_unconfirmed={boundary_counts['present_unconfirmed']}, "
+        f"missing={boundary_counts['missing']}"
+    )
+    print("Source: local registry file only; this does not query DynamoDB or identify the active farmer's farm.")
     if counts["ERROR"]:
         return 1
     if args.strict and counts["WARNING"]:
