@@ -32,6 +32,7 @@ class FarmRegistryPreflightTests(unittest.TestCase):
         unconfirmed = record("unconfirmed")
         unconfirmed["farmer_confirmed"] = False
         missing = record("missing")
+        missing["farmer_confirmed"] = False
         missing.pop("boundary")
         invalid_confirmed = record("invalid")
         invalid_confirmed["boundary"] = {"type": "Polygon", "coordinates": []}
